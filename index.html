@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FayCRChat</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.css">
+    <meta name="google-client-id" content="">
+    <script>
+      (function(){
+        try{
+          fetch('/api/env').then(r=>r.json()).then(d=>{
+            window.GOOGLE_CLIENT_ID = d.googleClientId || '';
+            window.DISCORD_CLIENT_ID = d.discordClientId || '';
+          });
+        }catch(e){}
+      })();
+    </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js" defer></script>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">FayCRChat</div>
+        <div class="header-actions" id="headerActions">
+            <!-- 未登入時顯示 -->
+            <div class="auth-buttons" id="authButtons">
+                <button class="btn btn-secondary" id="loginBtn">登入</button>
+                <button class="btn btn-primary" id="registerBtn">註冊</button>
+            </div>
+            <!-- 登入後顯示 -->
+            <div class="user-info" id="userInfo" style="display: none;">
+                <img class="user-avatar" id="userAvatar" src="" alt="頭像" title="點我編輯個人資料">
+                <span class="user-name" id="userName"></span>
+                <button class="btn btn-secondary" id="logoutBtn">登出</button>
+            </div>
+        </div>
+    </header>
+    
+    <main class="main-content">
+        <div class="snap-container" id="snapContainer">
+        <!-- 首頁內容區域 -->
+        <div class="welcome-section snap-section" id="welcomeSection">
+            <div class="glow glow-a parallax" data-speed="0.12" aria-hidden="true"></div>
+            <div class="glow glow-b parallax" data-speed="0.08" aria-hidden="true"></div>
+            <div class="container-xl">
+                <h1 id="welcomeTitle" class="parallax reveal" data-speed="0.35">歡迎來到 FayCRChat</h1>
+                <p class="welcome-sub parallax reveal" data-speed="0.4" style="transition-delay:.05s">請登入或註冊以開始使用</p>
+                <div class="hero-cta reveal" style="transition-delay:.1s">
+                    <a class="btn btn-cta parallax" data-speed="0.5" id="chatCtaButton" href="https://faycrchat.vercel.app/chat">開始極致聊天體驗</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能特色 -->
+        <section class="features snap-section" aria-labelledby="featuresTitle">
+            <div class="container-xl">
+                <div class="section-header reveal">
+                    <h2 class="section-title" id="featuresTitle">強大功能</h2>
+                </div>
+                <div class="features-grid">
+                <div class="feature-card reveal" style="transition-delay:.05s">
+                    <div class="feature-icon"><i class="fas fa-comments"></i></div>
+                    <h3>即時聊天</h3>
+                    <p>快速、穩定的即時訊息傳遞，讓你與朋友隨時保持聯繫</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay:.12s">
+                    <div class="feature-icon"><i class="fas fa-globe"></i></div>
+                    <h3>跨平台支援</h3>
+                    <p>支援所有主流設備和瀏覽器，隨時隨地都能聊天</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay:.2s">
+                    <div class="feature-icon"><i class="fas fa-palette"></i></div>
+                    <h3>個性化介面</h3>
+                    <p>豐富的主題和自訂選項，打造專屬於你的聊天體驗</p>
+                </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 社群與數據 -->
+        <section class="community snap-section" aria-labelledby="communityTitle">
+            <div class="community-content container-xl">
+                <h2 class="section-title reveal" id="communityTitle">加入我們的社群</h2>
+                <p class="section-sub reveal" style="transition-delay:.06s">成千上萬的用戶已經在使用 FayCRChat，成為我們大家庭的一員吧！</p>
+                <div class="stats-grid">
+                    <div class="stat-item reveal" style="transition-delay:.05s">
+                        <div class="stat-value">50K+</div>
+                        <div class="stat-label">活躍用戶</div>
+                    </div>
+                    <div class="stat-item reveal" style="transition-delay:.12s">
+                        <div class="stat-value">1M+</div>
+                        <div class="stat-label">訊息傳送</div>
+                    </div>
+                    <div class="stat-item reveal" style="transition-delay:.2s">
+                        <div class="stat-value">99.9%</div>
+                        <div class="stat-label">穩定運行</div>
+                    </div>
+                </div>
+                <div class="community-cta reveal" style="transition-delay:.28s">
+                    <a class="btn btn-discord btn-full" href="https://discord.gg/KPHmAmqwk3" target="_blank" rel="noopener">加入DC</a>
+                </div>
+            </div>
+        </section>
+        </div>
+    </main>
+
+    <!-- Chat 頁面容器（先置底，不影響首頁；/chat 可重用此結構）-->
+    <template id="chatTemplate">
+      <div class="chat-app">
+        <nav class="chat-rail">
+          <button class="rail-item is-active" data-rail="all" title="所有"><i class="fas fa-comment-dots"></i></button>
+          <button class="rail-item" data-rail="home" title="首頁"><i class="fas fa-home"></i></button>
+          <button class="rail-item" data-rail="friends" title="好友"><i class="fas fa-user-friends"></i></button>
+          <button class="rail-item" data-rail="groups" title="群組"><i class="fas fa-users"></i></button>
+          <button class="rail-item" data-rail="explore" title="探索"><i class="fas fa-globe"></i></button>
+          <button class="rail-item" data-rail="settings" title="設定"><i class="fas fa-cog"></i></button>
+          <div class="rail-bottom">
+            <button id="railNotifBtn" class="rail-item" title="通知"><i class="fas fa-bell"></i></button>
+            <button id="railAvatarBtn" class="rail-item avatar" title="個人">
+              <img id="railAvatarImg" alt="我"/>
+            </button>
+            <div id="railAvatarMenu" class="rail-menu">
+              <button id="railMenuSettings" class="rail-menu-item"><i class="fas fa-user-cog"></i> 設定</button>
+              <button id="railMenuAddFriend" class="rail-menu-item"><i class="fas fa-user-plus"></i> 新增好友</button>
+            </div>
+          </div>
+        </nav>
+        <aside class="chat-sidebar">
+          <div id="sidebarContent">
+            <!-- 這裡依據導覽按鈕動態切換：好友列表 / 主頁歡迎 / 群組列表 -->
+          </div>
+        </aside>
+        <section class="chat-main">
+          <header class="chat-header">
+            <div class="chat-title" id="chatTitle">選擇一個會話開始聊天</div>
+          </header>
+          <div class="chat-messages" id="chatMessages"></div>
+          <footer class="chat-input">
+            <input id="chatInput" type="text" placeholder="輸入訊息..." />
+            <button id="chatSendBtn" class="btn btn-primary">傳送</button>
+          </footer>
+        </section>
+      </div>
+    </template>
+
+    <!-- 新增好友彈窗 -->
+    <div class="modal" id="addFriendModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>新增好友</h2>
+          <span class="close" data-modal-id="addFriendModal">&times;</span>
+        </div>
+        <form class="auth-form" id="addFriendForm">
+          <div class="form-group">
+            <label for="addFriendHandle">好友 ID</label>
+            <input type="text" id="addFriendHandle" placeholder="對方的 ID（英文/數字/-/_）" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">發送</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 通知彈窗（好友邀請） -->
+    <div class="modal" id="notificationsModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>通知</h2>
+          <span class="close" data-modal-id="notificationsModal">&times;</span>
+        </div>
+        <div class="auth-form" id="notificationsBody"></div>
+      </div>
+    </div>
+    <!-- 登入彈窗 -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>登入</h2>
+                <span class="close" data-modal-id="loginModal">&times;</span>
+            </div>
+            <form class="auth-form" id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">電子郵件</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">密碼</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-full">登入</button>
+                <div style="margin: 12px 0; display:flex; flex-direction:column; gap:8px; align-items:center;">
+                    <a id="googleOAuthLink" class="btn btn-google btn-full" href="#"><i class="fab fa-google"></i> 以 Google 登入</a>
+                    <a id="discordOAuthLink" class="btn btn-discord btn-full" href="#"><i class="fab fa-discord"></i> 以 Discord 登入</a>
+                </div>
+                <div class="auth-switch">
+                    還沒有帳號？ <a href="#" id="switchToRegisterLink">立即註冊</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 註冊彈窗 -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>註冊</h2>
+                <span class="close" data-modal-id="registerModal">&times;</span>
+            </div>
+            <form class="auth-form" id="registerForm">
+                <div class="form-group">
+                    <label for="registerUsername">使用者名稱</label>
+                    <input type="text" id="registerUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerHandle">自訂 ID（只能英文小寫、數字、-、_）</label>
+                    <div style="display:flex; gap:.5rem; align-items:center;">
+                        <input type="text" id="registerHandle" placeholder="例如: faycr_master" title="只能英文小寫、數字、-、_">
+                        <button type="button" class="btn btn-secondary" id="checkHandleBtn">檢查</button>
+                    </div>
+                    <div id="handleHint" style="margin-top:.4rem; font-size:.9rem;"></div>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">電子郵件</label>
+                    <input type="email" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">密碼</label>
+                    <input type="password" id="registerPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">確認密碼</label>
+                    <input type="password" id="confirmPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="userAvatar">頭像</label>
+                    <div class="avatar-upload">
+                        <img class="avatar-preview" id="avatarPreview" src="" alt="頭像預覽">
+                        <input type="file" id="avatarInput" accept="image/*">
+                        <label for="avatarInput" class="avatar-upload-btn">
+                            <i class="fas fa-camera"></i>
+                            選擇頭像
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" id="registerSubmitBtn" class="btn btn-primary btn-full">註冊</button>
+                <div class="auth-switch">
+                    已有帳號？ <a href="#" id="switchToLoginLink">立即登入</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 電子郵件驗證彈窗 -->
+    <div class="modal" id="verificationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>電子郵件驗證</h2>
+            </div>
+            <div class="verification-content">
+                <i class="fas fa-envelope verification-icon"></i>
+                <p>我們已向您的電子郵件發送了6位數驗證碼</p>
+                <p class="verification-email" id="verificationEmail"></p>
+                <div class="form-group">
+                    <label for="verificationCode">驗證碼</label>
+                    <input type="text" id="verificationCode" maxlength="6" placeholder="請輸入6位數驗證碼">
+                </div>
+                <button class="btn btn-primary btn-full" id="verifyBtn">驗證</button>
+                <div class="resend-section">
+                    <button class="btn btn-link" id="resendBtn">重新發送驗證碼</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯個人資料彈窗 -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>編輯個人資料</h2>
+                <span class="close" data-modal-id="profileModal">&times;</span>
+            </div>
+            <form class="auth-form" id="profileForm">
+                <div class="form-group">
+                    <label for="profileUserId">我的 ID</label>
+                    <div style="display:flex; gap:.5rem; align-items:center;">
+                        <input type="text" id="profileUserId" readonly style="flex:1;" autocomplete="off" spellcheck="false" />
+                        <button type="button" class="btn btn-secondary" id="copyUserIdBtn" title="複製 ID">複製</button>
+                    </div>
+                    <div id="profileUserIdHint" style="margin-top:.4rem; font-size:.9rem; color:#6b7280;"></div>
+                </div>
+                <div class="form-group">
+                    <label for="profileUsername">暱稱</label>
+                    <input type="text" id="profileUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="profileAvatarInput">頭像</label>
+                    <div class="avatar-upload">
+                        <img class="avatar-preview" id="profileAvatarPreview" src="" alt="頭像預覽">
+                        <input type="file" id="profileAvatarInput" accept="image/*">
+                        <label for="profileAvatarInput" class="avatar-upload-btn">
+                            <i class="fas fa-camera"></i>
+                            選擇頭像
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" id="profileSaveBtn" class="btn btn-primary btn-full">儲存變更</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- OAuth 首次登入補資料 -->
+    <div class="modal" id="oauthCompleteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>完成基本設定</h2>
+                <span class="close" data-modal-id="oauthCompleteModal">&times;</span>
+            </div>
+            <form class="auth-form" id="oauthCompleteForm">
+                <div class="form-group">
+                    <label for="oauthHandle">自訂 ID（英文小寫、數字、-、_）</label>
+                    <div style="display:flex; gap:.5rem; align-items:center;">
+                        <input type="text" id="oauthHandle" placeholder="例如: faycr_master" title="只能英文小寫、數字、-、_">
+                        <button type="button" class="btn btn-secondary" id="oauthCheckHandleBtn">檢查</button>
+                    </div>
+                    <div id="oauthHandleHint" style="margin-top:.4rem; font-size:.9rem;"></div>
+                </div>
+                <div class="form-group">
+                    <label for="oauthUsername">暱稱（可調整）</label>
+                    <input type="text" id="oauthUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="oauthAvatarInput">頭像（可調整）</label>
+                    <div class="avatar-upload">
+                        <img class="avatar-preview" id="oauthAvatarPreview" src="" alt="頭像預覽">
+                        <input type="file" id="oauthAvatarInput" accept="image/*">
+                        <label for="oauthAvatarInput" class="avatar-upload-btn">
+                            <i class="fas fa-camera"></i>
+                            選擇頭像
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">完成設定</button>
+                <p style="margin-top:.75rem; color:#6b7280; font-size:.9rem;">完成後即可使用所有功能；您也可以隨時在右上角頭像再次調整暱稱與頭像。</p>
+            </form>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+</html>
