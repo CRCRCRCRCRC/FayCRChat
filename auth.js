@@ -784,22 +784,22 @@ async function handleLogin(event) {
 
 // 更新UI為已登入狀態
 function updateUIForLoggedInUser() {
-    // 隱藏登入/註冊按鈕
-    document.getElementById('authButtons').style.display = 'none';
-    
-    // 顯示用戶資訊
+    // 隱藏登入/註冊按鈕（若存在於此頁）
+    const authButtons = document.getElementById('authButtons');
+    if (authButtons) authButtons.style.display = 'none';
+
+    // 顯示用戶資訊（若頁面有 header）
     const userInfo = document.getElementById('userInfo');
     const userAvatar = document.getElementById('userAvatar');
     const userName = document.getElementById('userName');
-    
-    userAvatar.src = currentUser.avatar;
-    userName.textContent = currentUser.username;
-    userInfo.style.display = 'flex';
+    if (userInfo && userAvatar && userName) {
+        userAvatar.src = currentUser.avatar || userAvatar.src || '';
+        userName.textContent = currentUser.username || '';
+        userInfo.style.display = 'flex';
+        userAvatar.onclick = openProfileModal;
+    }
 
-    // 點擊頭像開啟編輯視窗
-    userAvatar.onclick = openProfileModal;
-    
-    // 更新歡迎訊息與 CTA（不覆蓋整區，避免後續區塊被清空）
+    // 更新首頁歡迎訊息（僅首頁存在）
     const welcomeTitle = document.getElementById('welcomeTitle');
     if (welcomeTitle) welcomeTitle.textContent = `歡迎回來，${currentUser.username}！`;
     const welcomeSub = document.querySelector('.welcome-sub');
@@ -859,22 +859,7 @@ async function sendCurrentChatMessage(){
 }
 
 function mountChatUI() {
-    const tpl = document.getElementById('chatTemplate');
-    if (!tpl) return;
-    // 隱藏首頁框架，保留彈窗節點
-    const header = document.querySelector('.header');
-    const main = document.querySelector('.main-content');
-    if (header) header.style.display = 'none';
-    if (main) main.style.display = 'none';
-    // 挂載聊天根節點
-    let root = document.getElementById('chatRoot');
-    if (!root){
-        root = document.createElement('div');
-        root.id = 'chatRoot';
-        document.body.appendChild(root);
-    }
-    root.innerHTML = '';
-    root.appendChild(tpl.content.cloneNode(true));
+    // chat.html 已包含完整結構，無需再動態 clone 節點
     // 側邊軌道切換
     document.querySelectorAll('.rail-item').forEach(btn=>{
         btn.addEventListener('click', ()=>{
@@ -1501,15 +1486,19 @@ function logout() {
     localStorage.removeItem('authToken');
     
     // 重置UI
-    document.getElementById('authButtons').style.display = 'flex';
-    document.getElementById('userInfo').style.display = 'none';
+    const authButtons = document.getElementById('authButtons');
+    if (authButtons) authButtons.style.display = 'flex';
+    const userInfo = document.getElementById('userInfo');
+    if (userInfo) userInfo.style.display = 'none';
     
     // 重置歡迎訊息
     const welcomeSection = document.getElementById('welcomeSection');
-    welcomeSection.innerHTML = `
-        <h1>歡迎來到 FayCR連線室</h1>
-        <p>請登入或註冊以開始使用</p>
-    `;
+    if (welcomeSection) {
+        welcomeSection.innerHTML = `
+            <h1>歡迎來到 FayCR連線室</h1>
+            <p>請登入或註冊以開始使用</p>
+        `;
+    }
     
     showAlert('已成功登出', 'success');
 }
