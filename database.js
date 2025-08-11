@@ -42,6 +42,8 @@ async function ensureTables() {
             seen_at timestamptz
         )
     `;
+    // 用於客戶端冪等：避免重複插入同一則訊息
+    await sql`alter table messages add column if not exists client_id text unique`;
 }
 
 // 由暱稱產生基底 handle：只保留英文字母（a-z），轉小寫；空則回退 'user'
@@ -304,14 +306,27 @@ class Database {
     }
 
     // ====== Messaging ======
-    async sendMessage(senderId, toUserId, content) {
+    async sendMessage(senderId, toUserId, content, clientId = null) {
         await this._init;
         const receiverId = Number(toUserId);
         const text = (content || '').toString();
         if (!Number.isFinite(receiverId) || !text.trim()) {
             throw new Error('INVALID_INPUT');
         }
-        const rows = await sql`insert into messages (sender_id, receiver_id, content) values (${senderId}, ${receiverId}, ${text}) returning id, created_at`;
+        let rows;
+        if (clientId) {
+            rows = await sql`
+                insert into messages (sender_id, receiver_id, content, client_id)
+                values (${senderId}, ${receiverId}, ${text}, ${clientId})
+                on conflict (client_id) do nothing
+                returning id, created_at`;
+            if (!rows.length) {
+                // 已存在相同 client_id，查詢其 id
+                rows = await sql`select id, created_at from messages where client_id = ${clientId} limit 1`;
+            }
+        } else {
+            rows = await sql`insert into messages (sender_id, receiver_id, content) values (${senderId}, ${receiverId}, ${text}) returning id, created_at`;
+        }
         return { id: rows[0].id, createdAt: rows[0].created_at };
     }
 

@@ -807,7 +807,7 @@ function updateUIForLoggedInUser() {
 }
 
 // ============ Chat ============
-let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {} };
+let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {} };
 let isSendingMessage = false; // 防重入，避免重複送出
 
 // 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
@@ -828,26 +828,20 @@ async function sendCurrentChatMessage(){
     const prevDisabled = input.disabled;
     input.disabled = true; btn.disabled = true;
     try{
+        const clientId = `${currentUser.id}-${chatState.currentPeer.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const resp = await fetch(`${API_BASE_URL}/messages`, {
             method:'POST',
             headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` },
-            body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text })
+            body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text, clientId })
         });
         if (resp.ok){
             input.value='';
-            // 立即嘗試增量拉取，縮短感知延遲
-            try{
-                const lastId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
-                const url = lastId ? `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}&after=${lastId}` : `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`;
-                const r2 = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
-                if (r2.ok){
-                    const d2 = await r2.json();
-                    appendMessages(d2.messages||[]);
-                } else {
-                    // 後備：全量刷新一次
-                    await fetchMessages();
-                }
-            }catch(_) { await fetchMessages(); }
+            // 使用伺服器回傳 id，避免之後增量拉取重複顯示
+            let r = null;
+            try { r = await resp.json(); } catch(_) {}
+            const serverId = r && r.id ? r.id : null;
+            const createdAt = r && r.createdAt ? r.createdAt : Date.now();
+            appendMessages([{ id: serverId, sender_id: currentUser.id, receiver_id: chatState.currentPeer.id, content: text, created_at: createdAt, seen_at: null }]);
         }
         else {
             let detail = '';
@@ -1127,6 +1121,8 @@ function renderMessages(list){
     const box = document.getElementById('chatMessages');
     box.innerHTML = '';
     let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
+    // 重置已渲染集合，避免後續 append 去重失效
+    chatState.renderedIdSetByPeer[chatState.currentPeer.id] = new Set();
     list.forEach(m=>{
         const mine = m.sender_id === currentUser.id;
         const row = document.createElement('div');
@@ -1136,10 +1132,11 @@ function renderMessages(list){
             : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
         box.appendChild(row);
         if (m.id && m.id > maxId) maxId = m.id;
+        if (m.id) chatState.renderedIdSetByPeer[chatState.currentPeer.id].add(m.id);
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     // 顯示已讀：取最後一則我方訊息且 seen_at 不為空
-    const lastSeen = [...list].reverse().find(m=> m.sender_id===currentUser.id && m.seen_at);
+    const lastSeen = [...list].reverse().find(m=> m.sender_id===currentUser.id && !!m.seen_at);
     if (lastSeen){
         const seenRow = document.createElement('div');
         seenRow.style.display='flex';
@@ -1168,33 +1165,42 @@ function wireChatSend(){
     const freshInput = document.getElementById('chatInput');
     if (freshInput) freshInput.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } }, { once: false });
     // 初始未選好友前禁用
-    input.disabled = true; input.placeholder = '請先從左邊選擇好友';
+    if (freshInput) { freshInput.disabled = true; freshInput.placeholder = '請先從左邊選擇好友'; }
 }
 
 // ===== 低延遲增量輪詢與已讀節流 =====
 let pollTimer = null;
+let pollCounter = 0;
 function startMessagePolling(){
     stopMessagePolling();
     pollTimer = setInterval(async ()=>{
         try{
             if (!chatState.currentPeer) return;
-            const lastId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
-            const url = lastId ? `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}&after=${lastId}` : `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`;
-            const resp = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
-            if (!resp.ok) return;
-            const d = await resp.json();
-            const list = d.messages||[];
-            if (!list.length) return;
-            appendMessages(list);
+            pollCounter = (pollCounter + 1) % 5;
+            if (pollCounter === 0) {
+                await fetchMessages(); // 週期性全量刷新，更新已讀狀態
+            } else {
+                const lastId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
+                const url = lastId ? `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}&after=${lastId}` : `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`;
+                const resp = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
+                if (!resp.ok) return;
+                const d = await resp.json();
+                const list = d.messages||[];
+                if (!list.length) return;
+                appendMessages(list);
+            }
         }catch(_){ }
-    }, 1200); // 約 1.2s，兼顧延遲與成本
+    }, 700); // 降低延遲
 }
 function stopMessagePolling(){ if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
 function appendMessages(list){
     const box = document.getElementById('chatMessages');
     let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
+    const rendered = chatState.renderedIdSetByPeer[chatState.currentPeer.id] || (chatState.renderedIdSetByPeer[chatState.currentPeer.id] = new Set());
     list.forEach(m=>{
+        // 去重：若有 id 且已渲染過則跳過
+        if (m.id && rendered.has(m.id)) return;
         const mine = m.sender_id === currentUser.id;
         const row = document.createElement('div');
         row.className = `msg ${mine?'me':'peer'}`;
@@ -1203,6 +1209,7 @@ function appendMessages(list){
             : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
         box.appendChild(row);
         if (m.id && m.id > maxId) maxId = m.id;
+        if (m.id) rendered.add(m.id);
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     box.scrollTop = box.scrollHeight;
@@ -1221,15 +1228,7 @@ function scheduleMarkRead(){
     }, 800);
 }
 
-// 全域保險：若因動態重掛導致原綁定失效，透過事件委派補綁
-document.addEventListener('click', function(e){
-    const target = e.target;
-    if (!target) return;
-    if (target.id === 'chatSendBtn' || (target.closest && target.closest('#chatSendBtn'))){
-        e.preventDefault();
-        sendCurrentChatMessage();
-    }
-});
+// 取消全域 click 委派以避免重複觸發，改由 wireChatSend 精準綁定
 
 let lastEnterTs = 0;
 document.addEventListener('keydown', function(e){

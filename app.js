@@ -427,13 +427,14 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
 // 傳送訊息
 app.post('/api/messages', authenticateToken, async (req, res) => {
     try {
-        const { toUserId, content } = req.body;
+        const { toUserId, content, clientId } = req.body;
         const receiverId = Number(toUserId);
         const text = (content || '').toString();
         if (!Number.isFinite(receiverId) || !text.trim()) {
             return res.status(400).json({ error: 'BAD_REQUEST', message: '收件人或內容無效' });
         }
-        const r = await database.sendMessage(req.user.userId, receiverId, text);
+        const r = await database.sendMessage(req.user.userId, receiverId, text, clientId || null);
+        // 回傳標準化欄位（含 id），供前端去重
         res.json({ success: true, id: r.id, createdAt: r.createdAt });
     } catch (e) {
         console.error('POST /api/messages error:', e);
