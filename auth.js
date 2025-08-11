@@ -807,7 +807,7 @@ function updateUIForLoggedInUser() {
 }
 
 // ============ Chat ============
-let chatState = { currentPeer: null, friends: [], requests: [] };
+let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {} };
 let isSendingMessage = false; // 防重入，避免重複送出
 
 // 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
@@ -833,7 +833,22 @@ async function sendCurrentChatMessage(){
             headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` },
             body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text })
         });
-        if (resp.ok){ input.value=''; await fetchMessages(); }
+        if (resp.ok){
+            input.value='';
+            // 立即嘗試增量拉取，縮短感知延遲
+            try{
+                const lastId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
+                const url = lastId ? `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}&after=${lastId}` : `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`;
+                const r2 = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
+                if (r2.ok){
+                    const d2 = await r2.json();
+                    appendMessages(d2.messages||[]);
+                } else {
+                    // 後備：全量刷新一次
+                    await fetchMessages();
+                }
+            }catch(_) { await fetchMessages(); }
+        }
         else {
             let detail = '';
             try { detail = (await resp.json()).message || ''; } catch(_) { try { detail = await resp.text(); } catch(_) {} }
@@ -926,10 +941,10 @@ function mountChatUI() {
     bindAddFriendForm();
     loadFriends();
     wireChatSend();
-    // 週期刷新通知徽標
+    // 週期刷新通知徽標（提高即時性）
     refreshNotifications();
     if (window._notifTimer) clearInterval(window._notifTimer);
-    window._notifTimer = setInterval(refreshNotifications, 10000);
+    window._notifTimer = setInterval(refreshNotifications, 3000);
     // 若未登入或未完成設定，引導
     if (!currentUser) { showLogin(); }
     else if (!currentUser.handle) { openOAuthCompleteModal(); }
@@ -1086,6 +1101,8 @@ function openConversation(peer){
     document.getElementById('chatTitle').textContent = peer.username;
     document.getElementById('chatMessages').innerHTML = '';
     fetchMessages();
+    // 啟動增量輪詢，低延遲抓新訊息
+    startMessagePolling();
     // 允許輸入並聚焦
     const input = document.getElementById('chatInput');
     if (input) { input.disabled = false; input.placeholder = '輸入訊息...'; input.focus(); }
@@ -1109,6 +1126,7 @@ async function fetchMessages(){
 function renderMessages(list){
     const box = document.getElementById('chatMessages');
     box.innerHTML = '';
+    let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
     list.forEach(m=>{
         const mine = m.sender_id === currentUser.id;
         const row = document.createElement('div');
@@ -1117,7 +1135,9 @@ function renderMessages(list){
             ? `<div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div>`
             : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
         box.appendChild(row);
+        if (m.id && m.id > maxId) maxId = m.id;
     });
+    chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     // 顯示已讀：取最後一則我方訊息且 seen_at 不為空
     const lastSeen = [...list].reverse().find(m=> m.sender_id===currentUser.id && m.seen_at);
     if (lastSeen){
@@ -1129,10 +1149,8 @@ function renderMessages(list){
         box.appendChild(seenRow);
     }
     box.scrollTop = box.scrollHeight;
-    // 標記對方訊息為已讀
-    if (chatState.currentPeer){
-        fetch(`${API_BASE_URL}/messages/read`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ withUserId: chatState.currentPeer.id }) }).catch(()=>{});
-    }
+    // 標記對方訊息為已讀（節流：避免頻繁打）
+    scheduleMarkRead();
 }
 
 function wireChatSend(){
@@ -1151,6 +1169,56 @@ function wireChatSend(){
     if (freshInput) freshInput.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } }, { once: false });
     // 初始未選好友前禁用
     input.disabled = true; input.placeholder = '請先從左邊選擇好友';
+}
+
+// ===== 低延遲增量輪詢與已讀節流 =====
+let pollTimer = null;
+function startMessagePolling(){
+    stopMessagePolling();
+    pollTimer = setInterval(async ()=>{
+        try{
+            if (!chatState.currentPeer) return;
+            const lastId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
+            const url = lastId ? `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}&after=${lastId}` : `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`;
+            const resp = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
+            if (!resp.ok) return;
+            const d = await resp.json();
+            const list = d.messages||[];
+            if (!list.length) return;
+            appendMessages(list);
+        }catch(_){ }
+    }, 1200); // 約 1.2s，兼顧延遲與成本
+}
+function stopMessagePolling(){ if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function appendMessages(list){
+    const box = document.getElementById('chatMessages');
+    let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
+    list.forEach(m=>{
+        const mine = m.sender_id === currentUser.id;
+        const row = document.createElement('div');
+        row.className = `msg ${mine?'me':'peer'}`;
+        row.innerHTML = mine
+            ? `<div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div>`
+            : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
+        box.appendChild(row);
+        if (m.id && m.id > maxId) maxId = m.id;
+    });
+    chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
+    box.scrollTop = box.scrollHeight;
+    scheduleMarkRead();
+}
+
+let _markReadTimer = null;
+function scheduleMarkRead(){
+    if (_markReadTimer) return;
+    _markReadTimer = setTimeout(async ()=>{
+        _markReadTimer = null;
+        if (!chatState.currentPeer) return;
+        try{
+            await fetch(`${API_BASE_URL}/messages/read`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ withUserId: chatState.currentPeer.id }) });
+        }catch(_){ }
+    }, 800);
 }
 
 // 全域保險：若因動態重掛導致原綁定失效，透過事件委派補綁

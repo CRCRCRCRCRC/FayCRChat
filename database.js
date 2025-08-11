@@ -315,11 +315,21 @@ class Database {
         return { id: rows[0].id, createdAt: rows[0].created_at };
     }
 
-    async getMessages(userId, withUserId, limit = 50, beforeId = null) {
+    async getMessages(userId, withUserId, limit = 50, beforeId = null, afterId = null) {
         await this._init;
         const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
         let rows;
-        if (beforeId != null) {
+        if (afterId != null) {
+            rows = await sql`
+                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
+                from messages m
+                where ((m.sender_id = ${userId} and m.receiver_id = ${withUserId})
+                   or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId}))
+                  and m.id > ${afterId}
+                order by m.id asc
+                limit ${safeLimit}`;
+            return rows; // already asc for incremental append
+        } else if (beforeId != null) {
             rows = await sql`
                 select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
                 from messages m
@@ -328,6 +338,7 @@ class Database {
                   and m.id < ${beforeId}
                 order by m.id desc
                 limit ${safeLimit}`;
+            return rows.reverse();
         } else {
             rows = await sql`
                 select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
@@ -336,8 +347,8 @@ class Database {
                    or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId})
                 order by m.id desc
                 limit ${safeLimit}`;
+            return rows.reverse();
         }
-        return rows.reverse();
     }
 
     async markMessagesRead(userId, withUserId) {

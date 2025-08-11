@@ -412,10 +412,11 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
     try {
         const withUserId = parseInt(req.query.with, 10);
         const beforeId = req.query.before ? parseInt(req.query.before, 10) : null;
+        const afterId = req.query.after ? parseInt(req.query.after, 10) : null;
         if (!Number.isFinite(withUserId)) {
             return res.status(400).json({ error: 'BAD_REQUEST', message: '缺少或無效的對話對象' });
         }
-        const list = await database.getMessages(req.user.userId, withUserId, 50, beforeId);
+        const list = await database.getMessages(req.user.userId, withUserId, 50, beforeId, afterId);
         res.json({ success: true, messages: list });
     } catch (e) {
         console.error('GET /api/messages error:', e);
@@ -444,10 +445,13 @@ app.post('/api/messages', authenticateToken, async (req, res) => {
 app.post('/api/messages/read', authenticateToken, async (req, res) => {
     try {
         const { withUserId } = req.body;
-        await database.markMessagesRead(req.user.userId, withUserId);
+        const peerId = Number(withUserId);
+        if (!Number.isFinite(peerId)) return res.status(400).json({ error: 'BAD_REQUEST', message: 'withUserId 無效' });
+        await database.markMessagesRead(req.user.userId, peerId);
         res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ error: 'READ_FAILED' });
+        console.error('POST /api/messages/read error:', e);
+        res.status(500).json({ error: 'READ_FAILED', message: e.message || '已讀標記失敗' });
     }
 });
 // 管理端：清空所有使用者（需啟用與權杖）
