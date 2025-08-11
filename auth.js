@@ -1132,6 +1132,8 @@ async function fetchMessages(){
 function renderMessages(list){
     const box = document.getElementById('chatMessages');
     const shouldStick = isNearBottom(box, 64);
+    const prevTop = box.scrollTop;
+    const prevHeight = box.scrollHeight;
     box.innerHTML = '';
     let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
     // 重置已渲染集合，避免後續 append 去重失效
@@ -1152,7 +1154,10 @@ function renderMessages(list){
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     if (shouldStick || chatState.autoScroll) {
-    box.scrollTop = box.scrollHeight;
+        box.scrollTop = box.scrollHeight;
+    } else {
+        const delta = box.scrollHeight - prevHeight;
+        if (delta !== 0) box.scrollTop = prevTop + delta;
     }
     // 標記對方訊息為已讀（節流：避免頻繁打）
     scheduleMarkRead();
@@ -1227,6 +1232,9 @@ function restartPolling(){
 function appendMessages(list){
     const box = document.getElementById('chatMessages');
     const wasStick = chatState.autoScroll;
+    const anchoredToBottom = isNearBottom(box, 48);
+    const prevTop = box.scrollTop;
+    const prevHeight = box.scrollHeight;
     let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
     const rendered = chatState.renderedIdSetByPeer[chatState.currentPeer.id] || (chatState.renderedIdSetByPeer[chatState.currentPeer.id] = new Set());
     list.forEach(m=>{
@@ -1248,8 +1256,12 @@ function appendMessages(list){
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     // 只有在使用者靠近底部或是我方訊息時才自動置底
     const containsMine = list.some(m => m.sender_id === currentUser.id);
-    if (wasStick || containsMine) {
+    if (wasStick || containsMine || anchoredToBottom) {
         box.scrollTop = box.scrollHeight;
+    } else {
+        // 補償內容變動造成的滾動位移，避免輕微上跳
+        const delta = box.scrollHeight - prevHeight;
+        if (delta !== 0) box.scrollTop = prevTop + delta;
     }
     scheduleMarkRead();
     renderReadReceipt();
@@ -1258,6 +1270,9 @@ function appendMessages(list){
 function renderReadReceipt(){
     const box = document.getElementById('chatMessages');
     if (!box) return;
+    const anchoredToBottom = isNearBottom(box, 48);
+    const prevTop = box.scrollTop;
+    const prevHeight = box.scrollHeight;
     const existing = document.getElementById('readReceiptMarker');
     if (existing) existing.remove();
     const msgs = Array.from(box.querySelectorAll('.msg'));
@@ -1273,6 +1288,13 @@ function renderReadReceipt(){
     receipt.style.marginTop = '2px';
     receipt.innerHTML = `<img src="${chatState.currentPeer.avatar||''}" style="width:16px;height:16px;border-radius:50%;" title="已讀"/>`;
     lastSeenMine.insertAdjacentElement('afterend', receipt);
+    // 保持使用者當前視窗位置，避免「往上滑一點」的跳動
+    if (anchoredToBottom) {
+        box.scrollTop = box.scrollHeight;
+    } else {
+        const delta = box.scrollHeight - prevHeight;
+        if (delta !== 0) box.scrollTop = prevTop + delta;
+    }
 }
 
 let _markReadTimer = null;
