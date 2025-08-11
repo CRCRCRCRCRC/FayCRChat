@@ -381,6 +381,12 @@ function showLogin() {
     document.getElementById('loginEmail').focus();
 }
 
+// 僅在有登入彈窗存在時才提示登入（避免聊天頁初載時誤彈）
+function promptLogin(){
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) { showLogin(); }
+}
+
 // 顯示註冊彈窗
 function showRegister() {
     if (currentUser && !currentUser.handle) {
@@ -787,7 +793,7 @@ function updateUIForLoggedInUser() {
     // 隱藏登入/註冊按鈕（若存在於此頁）
     const authButtons = document.getElementById('authButtons');
     if (authButtons) authButtons.style.display = 'none';
-
+    
     // 顯示用戶資訊（若頁面有 header）
     const userInfo = document.getElementById('userInfo');
     const userAvatar = document.getElementById('userAvatar');
@@ -795,10 +801,10 @@ function updateUIForLoggedInUser() {
     if (userInfo && userAvatar && userName) {
         userAvatar.src = currentUser.avatar || userAvatar.src || '';
         userName.textContent = currentUser.username || '';
-        userInfo.style.display = 'flex';
-        userAvatar.onclick = openProfileModal;
+    userInfo.style.display = 'flex';
+    userAvatar.onclick = openProfileModal;
     }
-
+    
     // 更新首頁歡迎訊息（僅首頁存在）
     const welcomeTitle = document.getElementById('welcomeTitle');
     if (welcomeTitle) welcomeTitle.textContent = `歡迎回來，${currentUser.username}！`;
@@ -875,6 +881,7 @@ function mountChatUI() {
     if (railAvatarImg) {
         const init = (currentUser && currentUser.username ? currentUser.username[0] : 'U');
         railAvatarImg.src = (currentUser && currentUser.avatar) ? currentUser.avatar : generateAvatarDataUrl(init);
+        railAvatarImg.alt = currentUser && currentUser.username ? currentUser.username : '我';
     }
     const railAvatarBtn = document.getElementById('railAvatarBtn');
     const railMenu = document.getElementById('railAvatarMenu');
@@ -935,7 +942,7 @@ function mountChatUI() {
     if (window._notifTimer) clearInterval(window._notifTimer);
     window._notifTimer = setInterval(refreshNotifications, 3000);
     // 若未登入或未完成設定，引導
-    if (!currentUser) { showLogin(); }
+    if (!currentUser) { promptLogin(); }
     else if (!currentUser.handle) { openOAuthCompleteModal(); }
 }
 
@@ -1139,7 +1146,7 @@ function renderMessages(list){
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     if (shouldStick || chatState.autoScroll) {
-        box.scrollTop = box.scrollHeight;
+    box.scrollTop = box.scrollHeight;
     } else {
         const delta = box.scrollHeight - prevHeight;
         if (delta !== 0) box.scrollTop = prevTop + delta;
@@ -1494,10 +1501,10 @@ function logout() {
     // 重置歡迎訊息
     const welcomeSection = document.getElementById('welcomeSection');
     if (welcomeSection) {
-        welcomeSection.innerHTML = `
-            <h1>歡迎來到 FayCR連線室</h1>
-            <p>請登入或註冊以開始使用</p>
-        `;
+    welcomeSection.innerHTML = `
+        <h1>歡迎來到 FayCR連線室</h1>
+        <p>請登入或註冊以開始使用</p>
+    `;
     }
     
     showAlert('已成功登出', 'success');
