@@ -808,6 +808,7 @@ function updateUIForLoggedInUser() {
 
 // ============ Chat ============
 let chatState = { currentPeer: null, friends: [], requests: [] };
+let isSendingMessage = false; // 防重入，避免重複送出
 
 // 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
 async function sendCurrentChatMessage(){
@@ -817,6 +818,8 @@ async function sendCurrentChatMessage(){
     const text = (input.value || '').trim();
     if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
     if (!text) return;
+    if (isSendingMessage) return; // 防雙觸發（Enter + Click、或多重綁定）
+    isSendingMessage = true;
     if (!authToken) {
         const t = localStorage.getItem('authToken');
         if (t) authToken = t;
@@ -842,6 +845,7 @@ async function sendCurrentChatMessage(){
         // 若已選擇會話則允許輸入
         if (chatState.currentPeer) input.disabled = false; else input.disabled = prevDisabled;
         btn.disabled = false;
+        isSendingMessage = false;
     }
 }
 
@@ -1134,8 +1138,17 @@ function renderMessages(list){
 function wireChatSend(){
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
-    if (btn) btn.addEventListener('click', sendCurrentChatMessage);
-    if (input) input.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } });
+    if (btn) {
+        btn.replaceWith(btn.cloneNode(true));
+    }
+    const freshBtn = document.getElementById('chatSendBtn');
+    if (freshBtn) freshBtn.addEventListener('click', sendCurrentChatMessage, { once: false });
+
+    if (input) {
+        input.replaceWith(input.cloneNode(true));
+    }
+    const freshInput = document.getElementById('chatInput');
+    if (freshInput) freshInput.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } }, { once: false });
     // 初始未選好友前禁用
     input.disabled = true; input.placeholder = '請先從左邊選擇好友';
 }
@@ -1150,10 +1163,14 @@ document.addEventListener('click', function(e){
     }
 });
 
+let lastEnterTs = 0;
 document.addEventListener('keydown', function(e){
     const input = document.getElementById('chatInput');
     if (!input) return;
     if (document.activeElement === input && e.key === 'Enter' && !e.shiftKey && !(e.isComposing || e.keyCode===229)){
+        const now = Date.now();
+        if (now - lastEnterTs < 300) { return; } // 去抖：300ms 內忽略重複 Enter
+        lastEnterTs = now;
         e.preventDefault();
         sendCurrentChatMessage();
     }
