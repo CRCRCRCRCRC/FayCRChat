@@ -809,6 +809,42 @@ function updateUIForLoggedInUser() {
 // ============ Chat ============
 let chatState = { currentPeer: null, friends: [], requests: [] };
 
+// 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
+async function sendCurrentChatMessage(){
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    if (!input || !btn) return; // UI 尚未掛載
+    const text = (input.value || '').trim();
+    if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
+    if (!text) return;
+    if (!authToken) {
+        const t = localStorage.getItem('authToken');
+        if (t) authToken = t;
+    }
+    if (!authToken) { showAlert('登入已過期，請重新登入'); showLogin(); return; }
+    const prevDisabled = input.disabled;
+    input.disabled = true; btn.disabled = true;
+    try{
+        const resp = await fetch(`${API_BASE_URL}/messages`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` },
+            body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text })
+        });
+        if (resp.ok){ input.value=''; await fetchMessages(); }
+        else {
+            let detail = '';
+            try { detail = (await resp.json()).message || ''; } catch(_) { try { detail = await resp.text(); } catch(_) {} }
+            if (resp.status === 401 || resp.status === 403) { showAlert('登入已過期或權限不足，請重新登入'); showLogin(); }
+            else { showAlert(detail || '傳送失敗，請稍後再試'); }
+        }
+    }catch(_){ showAlert('網路異常，請稍後再試'); }
+    finally{
+        // 若已選擇會話則允許輸入
+        if (chatState.currentPeer) input.disabled = false; else input.disabled = prevDisabled;
+        btn.disabled = false;
+    }
+}
+
 function mountChatUI() {
     const tpl = document.getElementById('chatTemplate');
     if (!tpl) return;
@@ -1023,7 +1059,8 @@ function switchRail(key){
     if (key === 'settings'){
         title.textContent = '偏好設定';
         messages.innerHTML = '';
-        list.innerHTML = '';
+        // 清空側欄內容
+        listBox.innerHTML = '';
         // 第六個（設定）：給你快速切換主題的示範
         const box = document.createElement('div');
         box.style.padding='1rem';
@@ -1091,60 +1128,30 @@ function renderMessages(list){
 function wireChatSend(){
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
-    const send = async ()=>{
-        const text = input.value.trim();
-        if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
-        if (!text) return;
-        // 確保有可用 token（避免因頁面刷新遺失變數）
-        if (!authToken) {
-            const t = localStorage.getItem('authToken');
-            if (t) authToken = t;
-        }
-        if (!authToken) {
-            showAlert('登入已過期，請重新登入');
-            showLogin();
-            return;
-        }
-        // 送出期間鎖定輸入與按鈕，避免重複提交
-        const prevDisabled = input.disabled;
-        input.disabled = true;
-        btn.disabled = true;
-        try{
-            const resp = await fetch(`${API_BASE_URL}/messages`, {
-                method:'POST',
-                headers:{
-                    'Content-Type':'application/json',
-                    Authorization:`Bearer ${authToken}`
-                },
-                body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text })
-            });
-            if (resp.ok){
-                input.value='';
-                await fetchMessages();
-            } else {
-                let detail = '';
-                try { detail = (await resp.json()).message || ''; } catch(_) {}
-                if (resp.status === 401 || resp.status === 403) {
-                    showAlert('登入已過期或權限不足，請重新登入');
-                    showLogin();
-                } else {
-                    showAlert(detail || '傳送失敗，請稍後再試');
-                }
-            }
-        }catch(err){
-            showAlert('網路異常，請稍後再試');
-        } finally {
-            input.disabled = prevDisabled ? prevDisabled : false;
-            // 若已選擇會話則允許輸入
-            if (chatState.currentPeer) input.disabled = false;
-            btn.disabled = false;
-        }
-    };
-    btn.addEventListener('click', send);
-    input.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+    if (btn) btn.addEventListener('click', sendCurrentChatMessage);
+    if (input) input.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } });
     // 初始未選好友前禁用
     input.disabled = true; input.placeholder = '請先從左邊選擇好友';
 }
+
+// 全域保險：若因動態重掛導致原綁定失效，透過事件委派補綁
+document.addEventListener('click', function(e){
+    const target = e.target;
+    if (!target) return;
+    if (target.id === 'chatSendBtn' || (target.closest && target.closest('#chatSendBtn'))){
+        e.preventDefault();
+        sendCurrentChatMessage();
+    }
+});
+
+document.addEventListener('keydown', function(e){
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    if (document.activeElement === input && e.key === 'Enter' && !e.shiftKey && !(e.isComposing || e.keyCode===229)){
+        e.preventDefault();
+        sendCurrentChatMessage();
+    }
+});
 
 function formatTime(ts){ try{ return new Date(ts).toLocaleString(); }catch(_){ return ''; } }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[c])); }
