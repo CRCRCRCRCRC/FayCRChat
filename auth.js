@@ -1236,20 +1236,19 @@ function renderReadReceipt(){
     if (!box) return;
     const existing = document.getElementById('readReceiptMarker');
     if (existing) existing.remove();
-    const msgs = box.querySelectorAll('.msg');
+    const msgs = Array.from(box.querySelectorAll('.msg'));
     if (!msgs.length) return;
-    const last = msgs[msgs.length-1];
-    const isMine = last.classList.contains('me') || last.dataset.fromMe === 'true';
-    const isSeen = last.dataset.seen === 'true';
-    if (isMine && isSeen){
-        const receipt = document.createElement('div');
-        receipt.id = 'readReceiptMarker';
-        receipt.style.display='flex';
-        receipt.style.alignItems='center';
-        receipt.style.justifyContent='flex-end';
-        receipt.innerHTML = `<img src="${chatState.currentPeer.avatar||''}" style="width:16px;height:16px;border-radius:50%;" title="已讀"/>`;
-        box.appendChild(receipt);
-    }
+    // 找到「最後一則『我方訊息』且已讀」的訊息節點
+    const lastSeenMine = [...msgs].reverse().find(el => (el.dataset.fromMe === 'true') && (el.dataset.seen === 'true'));
+    if (!lastSeenMine) return;
+    const receipt = document.createElement('div');
+    receipt.id = 'readReceiptMarker';
+    receipt.style.display='flex';
+    receipt.style.alignItems='center';
+    receipt.style.justifyContent='flex-end';
+    receipt.style.marginTop = '2px';
+    receipt.innerHTML = `<img src="${chatState.currentPeer.avatar||''}" style="width:16px;height:16px;border-radius:50%;" title="已讀"/>`;
+    lastSeenMine.insertAdjacentElement('afterend', receipt);
 }
 
 let _markReadTimer = null;
