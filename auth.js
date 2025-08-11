@@ -1149,7 +1149,7 @@ function renderMessages(list){
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     if (shouldStick || chatState.autoScroll) {
-        box.scrollTop = box.scrollHeight;
+    box.scrollTop = box.scrollHeight;
     }
     // 標記對方訊息為已讀（節流：避免頻繁打）
     scheduleMarkRead();
@@ -1177,6 +1177,8 @@ function wireChatSend(){
 // ===== 低延遲增量輪詢與已讀節流 =====
 let pollTimer = null;
 let pollCounter = 0;
+let backoffMs = 700;
+let backoffFailCount = 0;
 function startMessagePolling(){
     stopMessagePolling();
     pollTimer = setInterval(async ()=>{
@@ -1189,16 +1191,35 @@ function startMessagePolling(){
                 const lastId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
                 const url = lastId ? `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}&after=${lastId}` : `${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`;
                 const resp = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
+                if (resp.status === 429) { handlePollBackoff(); return; }
                 if (!resp.ok) return;
                 const d = await resp.json();
                 const list = d.messages||[];
                 if (list.length) appendMessages(list);
                 else renderReadReceipt(); // 即使沒新訊息也刷新已讀指示
+                resetPollBackoff();
             }
         }catch(_){ }
-    }, 700); // 降低延遲
+    }, backoffMs);
 }
 function stopMessagePolling(){ if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function handlePollBackoff(){
+    backoffFailCount = Math.min(backoffFailCount + 1, 6);
+    backoffMs = Math.min(5000, 700 * Math.pow(1.6, backoffFailCount));
+    restartPolling();
+}
+function resetPollBackoff(){
+    if (backoffFailCount !== 0 || backoffMs !== 700){
+        backoffFailCount = 0;
+        backoffMs = 700;
+        restartPolling();
+    }
+}
+function restartPolling(){
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    startMessagePolling();
+}
 
 function appendMessages(list){
     const box = document.getElementById('chatMessages');

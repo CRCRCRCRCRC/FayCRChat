@@ -51,14 +51,23 @@ app.use(helmet({
     },
 }));
 
-// 速率限制
-const limiter = rateLimit({
+// 速率限制（調整為分類限流）
+const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 300,
+    skip: (req, _res) => req.path.startsWith('/api/messages'),
     message: {
         error: 'RATE_LIMIT_EXCEEDED',
         message: '請求過於頻繁，請稍後再試'
     }
+});
+
+const messagesLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 180, // 約每秒 3 次
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'CHAT_RATE_LIMIT', message: '訊息請求過於頻繁，請稍後再試' }
 });
 
 const authLimiter = rateLimit({
@@ -70,7 +79,8 @@ const authLimiter = rateLimit({
     }
 });
 
-app.use(limiter);
+// 對一般 API 啟用一般限流；聊天訊息相關改用專屬限流
+app.use(generalLimiter);
 
 // CORS 配置（允許動態來源）
 app.use(cors({
@@ -408,7 +418,7 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
 });
 
 // 取得與某人對話訊息
-app.get('/api/messages', authenticateToken, async (req, res) => {
+app.get('/api/messages', authenticateToken, messagesLimiter, async (req, res) => {
     try {
         const withUserId = parseInt(req.query.with, 10);
         const beforeId = req.query.before ? parseInt(req.query.before, 10) : null;
@@ -425,7 +435,7 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
 });
 
 // 傳送訊息
-app.post('/api/messages', authenticateToken, async (req, res) => {
+app.post('/api/messages', authenticateToken, messagesLimiter, async (req, res) => {
     try {
         const { toUserId, content, clientId } = req.body;
         const receiverId = Number(toUserId);
@@ -443,7 +453,7 @@ app.post('/api/messages', authenticateToken, async (req, res) => {
 });
 
 // 已讀回報
-app.post('/api/messages/read', authenticateToken, async (req, res) => {
+app.post('/api/messages/read', authenticateToken, messagesLimiter, async (req, res) => {
     try {
         const { withUserId } = req.body;
         const peerId = Number(withUserId);
