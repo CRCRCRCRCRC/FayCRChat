@@ -807,7 +807,7 @@ function updateUIForLoggedInUser() {
 }
 
 // ============ Chat ============
-let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {} };
+let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {}, autoScroll: true };
 let isSendingMessage = false; // 防重入，避免重複送出
 
 // 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
@@ -935,6 +935,14 @@ function mountChatUI() {
     bindAddFriendForm();
     loadFriends();
     wireChatSend();
+    // 自動捲動狀態：使用者若往上捲動，暫停自動置底
+    const msgBox = document.getElementById('chatMessages');
+    chatState.autoScroll = true;
+    if (msgBox) {
+        msgBox.addEventListener('scroll', ()=>{
+            chatState.autoScroll = isNearBottom(msgBox, 48);
+        });
+    }
     // 週期刷新通知徽標（提高即時性）
     refreshNotifications();
     if (window._notifTimer) clearInterval(window._notifTimer);
@@ -1094,6 +1102,7 @@ function openConversation(peer){
     chatState.currentPeer = peer;
     document.getElementById('chatTitle').textContent = peer.username;
     document.getElementById('chatMessages').innerHTML = '';
+    chatState.autoScroll = true;
     fetchMessages();
     // 啟動增量輪詢，低延遲抓新訊息
     startMessagePolling();
@@ -1119,6 +1128,7 @@ async function fetchMessages(){
 
 function renderMessages(list){
     const box = document.getElementById('chatMessages');
+    const shouldStick = isNearBottom(box, 64);
     box.innerHTML = '';
     let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
     // 重置已渲染集合，避免後續 append 去重失效
@@ -1138,7 +1148,9 @@ function renderMessages(list){
         if (m.id) chatState.renderedIdSetByPeer[chatState.currentPeer.id].add(m.id);
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
-    box.scrollTop = box.scrollHeight;
+    if (shouldStick || chatState.autoScroll) {
+        box.scrollTop = box.scrollHeight;
+    }
     // 標記對方訊息為已讀（節流：避免頻繁打）
     scheduleMarkRead();
     renderReadReceipt();
@@ -1190,6 +1202,7 @@ function stopMessagePolling(){ if (pollTimer) { clearInterval(pollTimer); pollTi
 
 function appendMessages(list){
     const box = document.getElementById('chatMessages');
+    const wasStick = chatState.autoScroll;
     let maxId = chatState.lastMsgIdByPeer[chatState.currentPeer.id] || 0;
     const rendered = chatState.renderedIdSetByPeer[chatState.currentPeer.id] || (chatState.renderedIdSetByPeer[chatState.currentPeer.id] = new Set());
     list.forEach(m=>{
@@ -1209,7 +1222,11 @@ function appendMessages(list){
         if (m.id) rendered.add(m.id);
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
-    box.scrollTop = box.scrollHeight;
+    // 只有在使用者靠近底部或是我方訊息時才自動置底
+    const containsMine = list.some(m => m.sender_id === currentUser.id);
+    if (wasStick || containsMine) {
+        box.scrollTop = box.scrollHeight;
+    }
     scheduleMarkRead();
     renderReadReceipt();
 }
@@ -1264,6 +1281,11 @@ document.addEventListener('keydown', function(e){
 
 function formatTime(ts){ try{ return new Date(ts).toLocaleString(); }catch(_){ return ''; } }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, (c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[c])); }
+function isNearBottom(el, threshold=48){
+    if (!el) return true;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    return distance <= threshold;
+}
 
 function openOAuthCompleteModal() {
     // 預填現有 username 與 avatar
