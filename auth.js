@@ -1090,10 +1090,16 @@ function openConversation(peer){
 async function fetchMessages(){
     if (!chatState.currentPeer) return;
     try{
-        const resp = await fetch(`${API_BASE_URL}/messages?with=${chatState.currentPeer.id}`, { headers:{ Authorization:`Bearer ${authToken}` } });
-        const d = await resp.json();
+        const resp = await fetch(`${API_BASE_URL}/messages?with=${encodeURIComponent(chatState.currentPeer.id)}`, { headers:{ Authorization:`Bearer ${authToken}` } });
+        let d = {};
+        try { d = await resp.json(); } catch(_) {}
         if (resp.ok){ renderMessages(d.messages||[]); }
-    }catch(_){ }
+        else {
+            if (resp.status === 400) { showAlert(d.message || '參數無效'); }
+            else if (resp.status === 401 || resp.status === 403) { showAlert('登入已過期或權限不足，請重新登入'); showLogin(); }
+            else { showAlert(d.message || '載入訊息失敗'); }
+        }
+    }catch(err){ showAlert('網路異常，請稍後再試'); }
 }
 
 function renderMessages(list){

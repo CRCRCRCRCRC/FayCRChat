@@ -306,21 +306,37 @@ class Database {
     // ====== Messaging ======
     async sendMessage(senderId, toUserId, content) {
         await this._init;
-        const rows = await sql`insert into messages (sender_id, receiver_id, content) values (${senderId}, ${toUserId}, ${content}) returning id, created_at`;
+        const receiverId = Number(toUserId);
+        const text = (content || '').toString();
+        if (!Number.isFinite(receiverId) || !text.trim()) {
+            throw new Error('INVALID_INPUT');
+        }
+        const rows = await sql`insert into messages (sender_id, receiver_id, content) values (${senderId}, ${receiverId}, ${text}) returning id, created_at`;
         return { id: rows[0].id, createdAt: rows[0].created_at };
     }
 
     async getMessages(userId, withUserId, limit = 50, beforeId = null) {
         await this._init;
-        const cond = beforeId ? sql`and m.id < ${beforeId}` : sql``;
-        const rows = await sql`
-            select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
-            from messages m
-            where (m.sender_id = ${userId} and m.receiver_id = ${withUserId})
-               or (m.sender_id = ${withUserId} and m.receiver_id = ${userId})
-            ${cond}
-            order by m.id desc
-            limit ${limit}`;
+        const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+        let rows;
+        if (beforeId != null) {
+            rows = await sql`
+                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
+                from messages m
+                where ((m.sender_id = ${userId} and m.receiver_id = ${withUserId})
+                   or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId}))
+                  and m.id < ${beforeId}
+                order by m.id desc
+                limit ${safeLimit}`;
+        } else {
+            rows = await sql`
+                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
+                from messages m
+                where (m.sender_id = ${userId} and m.receiver_id = ${withUserId})
+                   or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId})
+                order by m.id desc
+                limit ${safeLimit}`;
+        }
         return rows.reverse();
     }
 

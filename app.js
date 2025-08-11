@@ -412,10 +412,14 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
     try {
         const withUserId = parseInt(req.query.with, 10);
         const beforeId = req.query.before ? parseInt(req.query.before, 10) : null;
+        if (!Number.isFinite(withUserId)) {
+            return res.status(400).json({ error: 'BAD_REQUEST', message: '缺少或無效的對話對象' });
+        }
         const list = await database.getMessages(req.user.userId, withUserId, 50, beforeId);
         res.json({ success: true, messages: list });
     } catch (e) {
-        res.status(500).json({ error: 'FETCH_FAILED' });
+        console.error('GET /api/messages error:', e);
+        res.status(500).json({ error: 'FETCH_FAILED', message: e.message || '取得訊息失敗' });
     }
 });
 
@@ -423,11 +427,16 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
 app.post('/api/messages', authenticateToken, async (req, res) => {
     try {
         const { toUserId, content } = req.body;
-        if (!toUserId || !content) return res.status(400).json({ error: 'BAD_REQUEST' });
-        const r = await database.sendMessage(req.user.userId, toUserId, content);
+        const receiverId = Number(toUserId);
+        const text = (content || '').toString();
+        if (!Number.isFinite(receiverId) || !text.trim()) {
+            return res.status(400).json({ error: 'BAD_REQUEST', message: '收件人或內容無效' });
+        }
+        const r = await database.sendMessage(req.user.userId, receiverId, text);
         res.json({ success: true, id: r.id, createdAt: r.createdAt });
     } catch (e) {
-        res.status(500).json({ error: 'SEND_FAILED' });
+        console.error('POST /api/messages error:', e);
+        res.status(500).json({ error: 'SEND_FAILED', message: e.message || '發送失敗' });
     }
 });
 
