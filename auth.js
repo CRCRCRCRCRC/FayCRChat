@@ -1127,6 +1127,9 @@ function renderMessages(list){
         const mine = m.sender_id === currentUser.id;
         const row = document.createElement('div');
         row.className = `msg ${mine?'me':'peer'}`;
+        if (m.id != null) row.dataset.msgId = String(m.id);
+        row.dataset.fromMe = mine ? 'true' : 'false';
+        row.dataset.seen = m.seen_at ? 'true' : 'false';
         row.innerHTML = mine
             ? `<div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div>`
             : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
@@ -1135,19 +1138,10 @@ function renderMessages(list){
         if (m.id) chatState.renderedIdSetByPeer[chatState.currentPeer.id].add(m.id);
     });
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
-    // 顯示已讀：取最後一則我方訊息且 seen_at 不為空
-    const lastSeen = [...list].reverse().find(m=> m.sender_id===currentUser.id && !!m.seen_at);
-    if (lastSeen){
-        const seenRow = document.createElement('div');
-        seenRow.style.display='flex';
-        seenRow.style.alignItems='center';
-        seenRow.style.justifyContent='flex-end';
-        seenRow.innerHTML = `<img src="${chatState.currentPeer.avatar||''}" style="width:16px;height:16px;border-radius:50%;" title="已讀"/>`;
-        box.appendChild(seenRow);
-    }
     box.scrollTop = box.scrollHeight;
     // 標記對方訊息為已讀（節流：避免頻繁打）
     scheduleMarkRead();
+    renderReadReceipt();
 }
 
 function wireChatSend(){
@@ -1186,8 +1180,8 @@ function startMessagePolling(){
                 if (!resp.ok) return;
                 const d = await resp.json();
                 const list = d.messages||[];
-                if (!list.length) return;
-                appendMessages(list);
+                if (list.length) appendMessages(list);
+                else renderReadReceipt(); // 即使沒新訊息也刷新已讀指示
             }
         }catch(_){ }
     }, 700); // 降低延遲
@@ -1204,6 +1198,9 @@ function appendMessages(list){
         const mine = m.sender_id === currentUser.id;
         const row = document.createElement('div');
         row.className = `msg ${mine?'me':'peer'}`;
+        if (m.id != null) row.dataset.msgId = String(m.id);
+        row.dataset.fromMe = mine ? 'true' : 'false';
+        row.dataset.seen = m.seen_at ? 'true' : 'false';
         row.innerHTML = mine
             ? `<div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div>`
             : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
@@ -1214,6 +1211,28 @@ function appendMessages(list){
     chatState.lastMsgIdByPeer[chatState.currentPeer.id] = maxId;
     box.scrollTop = box.scrollHeight;
     scheduleMarkRead();
+    renderReadReceipt();
+}
+
+function renderReadReceipt(){
+    const box = document.getElementById('chatMessages');
+    if (!box) return;
+    const existing = document.getElementById('readReceiptMarker');
+    if (existing) existing.remove();
+    const msgs = box.querySelectorAll('.msg');
+    if (!msgs.length) return;
+    const last = msgs[msgs.length-1];
+    const isMine = last.classList.contains('me') || last.dataset.fromMe === 'true';
+    const isSeen = last.dataset.seen === 'true';
+    if (isMine && isSeen){
+        const receipt = document.createElement('div');
+        receipt.id = 'readReceiptMarker';
+        receipt.style.display='flex';
+        receipt.style.alignItems='center';
+        receipt.style.justifyContent='flex-end';
+        receipt.innerHTML = `<img src="${chatState.currentPeer.avatar||''}" style="width:16px;height:16px;border-radius:50%;" title="已讀"/>`;
+        box.appendChild(receipt);
+    }
 }
 
 let _markReadTimer = null;
