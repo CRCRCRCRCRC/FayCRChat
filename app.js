@@ -23,6 +23,21 @@ try {
 }
 
 const app = express();
+// 簡易 SSE Hub（單實例最佳努力）
+const sseClients = global.__sseClients || new Map();
+global.__sseClients = sseClients;
+function getSseSet(userId){
+    const id = Number(userId);
+    if (!sseClients.has(id)) sseClients.set(id, new Set());
+    return sseClients.get(id);
+}
+function broadcastToUser(userId, eventName, payload){
+    const set = getSseSet(userId);
+    const data = `event: ${eventName}\n` + `data: ${JSON.stringify(payload)}\n\n`;
+    for (const res of [...set]){
+        try { res.write(data); } catch(_) { try{ set.delete(res); }catch(_){} }
+    }
+}
 // 在 Vercel/Proxy 環境下，必須信任代理，否則 rate-limit 會報 X-Forwarded-For 錯誤
 app.set('trust proxy', 1);
 
@@ -446,6 +461,8 @@ app.post('/api/messages', authenticateToken, messagesLimiter, async (req, res) =
         const r = await database.sendMessage(req.user.userId, receiverId, text, clientId || null);
         // 回傳標準化欄位（含 id），供前端去重
         res.json({ success: true, id: r.id, createdAt: r.createdAt });
+        // SSE 推播給接收者
+        try { broadcastToUser(receiverId, 'new_message', { id: r.id, sender_id: req.user.userId, receiver_id: receiverId, content: text, created_at: r.createdAt }); } catch(_) {}
     } catch (e) {
         console.error('POST /api/messages error:', e);
         res.status(500).json({ error: 'SEND_FAILED', message: e.message || '發送失敗' });
@@ -460,9 +477,32 @@ app.post('/api/messages/read', authenticateToken, messagesLimiter, async (req, r
         if (!Number.isFinite(peerId)) return res.status(400).json({ error: 'BAD_REQUEST', message: 'withUserId 無效' });
         await database.markMessagesRead(req.user.userId, peerId);
         res.json({ success: true });
+        // SSE 通知對方：你的訊息已被我讀取
+        try { broadcastToUser(peerId, 'read_update', { byUserId: req.user.userId, withUserId: peerId }); } catch(_) {}
     } catch (e) {
         console.error('POST /api/messages/read error:', e);
         res.status(500).json({ error: 'READ_FAILED', message: e.message || '已讀標記失敗' });
+    }
+});
+
+// SSE 連線（使用 token 查詢參數驗證）
+app.get('/api/stream', async (req, res) => {
+    try {
+        const token = req.query.token;
+        if (!token) return res.status(401).end();
+        let user;
+        try { user = jwt.verify(token, config.server.jwtSecret); } catch(_) { return res.status(403).end(); }
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        // 立即發送一次，讓連線就緒
+        res.write(':ok\n\n');
+        const set = getSseSet(user.userId);
+        set.add(res);
+        const keep = setInterval(()=>{ try{ res.write(':ka\n\n'); }catch(_){ } }, 20000);
+        req.on('close', () => { clearInterval(keep); try{ set.delete(res); }catch(_){} });
+    } catch (_) {
+        try { res.status(500).end(); } catch(_){ }
     }
 });
 // 管理端：清空所有使用者（需啟用與權杖）

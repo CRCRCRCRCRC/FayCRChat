@@ -15,6 +15,8 @@
           fetch('/api/env').then(r=>r.json()).then(d=>{
             window.GOOGLE_CLIENT_ID = d.googleClientId || '';
             window.DISCORD_CLIENT_ID = d.discordClientId || '';
+            window.PUSHER_KEY = d.pusherKey || '';
+            window.PUSHER_CLUSTER = d.pusherCluster || '';
           });
         }catch(e){}
       })();

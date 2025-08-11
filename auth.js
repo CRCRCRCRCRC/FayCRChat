@@ -943,6 +943,8 @@ function mountChatUI() {
             chatState.autoScroll = isNearBottom(msgBox, 48);
         });
     }
+    // 啟用 SSE 實時
+    initSSE();
     // 週期刷新通知徽標（提高即時性）
     refreshNotifications();
     if (window._notifTimer) clearInterval(window._notifTimer);
@@ -1106,6 +1108,7 @@ function openConversation(peer){
     fetchMessages();
     // 啟動增量輪詢，低延遲抓新訊息
     startMessagePolling();
+    // SSE 無需切換頻道
     // 允許輸入並聚焦
     const input = document.getElementById('chatInput');
     if (input) { input.disabled = false; input.placeholder = '輸入訊息...'; input.focus(); }
@@ -1305,6 +1308,31 @@ function isNearBottom(el, threshold=48){
     if (!el) return true;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     return distance <= threshold;
+}
+
+// ===== Realtime (SSE) =====
+let sseSource = null;
+function initSSE(){
+    try{
+        const t = authToken || localStorage.getItem('authToken');
+        if (!t) return;
+        if (sseSource) { try { sseSource.close(); } catch(_){} sseSource = null; }
+        sseSource = new EventSource(`/api/stream?token=${encodeURIComponent(t)}`);
+        sseSource.addEventListener('new_message', (e)=>{
+            try{
+                const data = JSON.parse(e.data||'{}');
+                if (!chatState.currentPeer || data.sender_id !== chatState.currentPeer.id) return;
+                appendMessages([data]);
+            }catch(_){ }
+        });
+        sseSource.addEventListener('read_update', (_)=>{
+            renderReadReceipt();
+        });
+        sseSource.onerror = ()=>{
+            try{ sseSource.close(); }catch(_){}
+            setTimeout(initSSE, 1500);
+        };
+    }catch(_){ }
 }
 
 function openOAuthCompleteModal() {
