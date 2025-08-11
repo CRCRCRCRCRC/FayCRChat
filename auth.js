@@ -52,8 +52,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }, { threshold: 0.15 });
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-    // 若在 /chat 頁面（含 hash #/chat），動態掛載 chat 介面
-    if (location.pathname.replace(/\/$/, '') === '/chat' || location.hash === '#/chat') {
+    // 若在 /chat 頁面（含 hash #/chat），掛載 chat 介面
+    if (location.pathname.replace(/\/$/, '') === '/chat' || location.pathname.endsWith('/chat.html') || location.hash === '#/chat') {
         (async ()=>{ await ensureCurrentUser(); mountChatUI(); })();
     }
 

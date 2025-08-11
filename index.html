@@ -110,72 +110,9 @@
         </div>
     </main>
 
-    <!-- Chat 頁面容器（先置底，不影響首頁；/chat 可重用此結構）-->
-    <template id="chatTemplate">
-      <div class="chat-app">
-        <nav class="chat-rail">
-          <button class="rail-item is-active" data-rail="all" title="所有"><i class="fas fa-comment-dots"></i></button>
-          <button class="rail-item" data-rail="home" title="首頁"><i class="fas fa-home"></i></button>
-          <button class="rail-item" data-rail="friends" title="好友"><i class="fas fa-user-friends"></i></button>
-          <button class="rail-item" data-rail="groups" title="群組"><i class="fas fa-users"></i></button>
-          <button class="rail-item" data-rail="explore" title="探索"><i class="fas fa-globe"></i></button>
-          <button class="rail-item" data-rail="settings" title="設定"><i class="fas fa-cog"></i></button>
-          <div class="rail-bottom">
-            <button id="railNotifBtn" class="rail-item" title="通知"><i class="fas fa-bell"></i></button>
-            <button id="railAvatarBtn" class="rail-item avatar" title="個人">
-              <img id="railAvatarImg" alt="我"/>
-            </button>
-            <div id="railAvatarMenu" class="rail-menu">
-              <button id="railMenuSettings" class="rail-menu-item"><i class="fas fa-user-cog"></i> 設定</button>
-              <button id="railMenuAddFriend" class="rail-menu-item"><i class="fas fa-user-plus"></i> 新增好友</button>
-            </div>
-          </div>
-        </nav>
-        <aside class="chat-sidebar">
-          <div id="sidebarContent">
-            <!-- 這裡依據導覽按鈕動態切換：好友列表 / 主頁歡迎 / 群組列表 -->
-          </div>
-        </aside>
-        <section class="chat-main">
-          <header class="chat-header">
-            <div class="chat-title" id="chatTitle">選擇一個會話開始聊天</div>
-          </header>
-          <div class="chat-messages" id="chatMessages"></div>
-          <footer class="chat-input">
-            <input id="chatInput" type="text" placeholder="輸入訊息..." />
-            <button id="chatSendBtn" class="btn btn-primary">傳送</button>
-          </footer>
-        </section>
-      </div>
-    </template>
+    <!-- Chat UI 已拆至 chat.html -->
 
-    <!-- 新增好友彈窗 -->
-    <div class="modal" id="addFriendModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>新增好友</h2>
-          <span class="close" data-modal-id="addFriendModal">&times;</span>
-        </div>
-        <form class="auth-form" id="addFriendForm">
-          <div class="form-group">
-            <label for="addFriendHandle">好友 ID</label>
-            <input type="text" id="addFriendHandle" placeholder="對方的 ID（英文/數字/-/_）" />
-          </div>
-          <button type="submit" class="btn btn-primary btn-full">發送</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- 通知彈窗（好友邀請） -->
-    <div class="modal" id="notificationsModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>通知</h2>
-          <span class="close" data-modal-id="notificationsModal">&times;</span>
-        </div>
-        <div class="auth-form" id="notificationsBody"></div>
-      </div>
-    </div>
+    <!-- Chat 相關彈窗已拆至 chat.html -->
     <!-- 登入彈窗 -->
     <div class="modal" id="loginModal">
         <div class="modal-content">
