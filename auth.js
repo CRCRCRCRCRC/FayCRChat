@@ -52,9 +52,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }, { threshold: 0.15 });
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-    // 若在 /chat 頁面（含 hash #/chat），掛載 chat 介面
+    // 若在 /chat 頁面（含 hash #/chat），掛載 chat 介面；未登入則導回首頁並要求登入
     if (location.pathname.replace(/\/$/, '') === '/chat' || location.pathname.endsWith('/chat.html') || location.hash === '#/chat') {
-        (async ()=>{ await ensureCurrentUser(); mountChatUI(); })();
+        (async ()=>{ const ok = await ensureCurrentUser(); if (!ok) { window.location.href = '/?login=1'; return; } mountChatUI(); })();
     }
 
     // 更強視差：根據 data-speed 微動（僅首屏元素）
@@ -75,6 +75,16 @@ document.addEventListener('DOMContentLoaded', function() {
             openOAuthCompleteModal();
         }
     }, 400);
+
+    // 若首頁帶有 login 參數或 #login，且尚未登入，則彈出登入
+    try{
+        if (!currentUser) {
+            const u = new URL(window.location.href);
+            if (u.searchParams.get('login') === '1' || u.hash === '#login') {
+                promptLogin();
+            }
+        }
+    }catch(_){ }
 });
 
 // 初始化認證狀態
@@ -813,7 +823,7 @@ function updateUIForLoggedInUser() {
 }
 
 // ============ Chat ============
-let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {}, autoScroll: true };
+let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {}, autoScroll: true, activeRail: 'all' };
 let isSendingMessage = false; // 防重入，避免重複送出
 
 // 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
@@ -872,6 +882,7 @@ function mountChatUI() {
             document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
             btn.classList.add('is-active');
             const key = btn.getAttribute('data-rail');
+            chatState.activeRail = key;
             switchRail(key);
         });
     });
@@ -944,6 +955,15 @@ function mountChatUI() {
     // 若未登入或未完成設定，引導
     if (!currentUser) { promptLogin(); }
     else if (!currentUser.handle) { openOAuthCompleteModal(); }
+    else {
+        // 恢復上一次的 rail 視圖
+        switchRail(chatState.activeRail || 'all');
+        const activeBtn = document.querySelector(`.rail-item[data-rail="${chatState.activeRail}"]`);
+        if (activeBtn) {
+            document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
+            activeBtn.classList.add('is-active');
+        }
+    }
 }
 
 function bindAddFriendForm(){
