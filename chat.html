@@ -22,7 +22,13 @@
   <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js" defer></script>
 </head>
 <body>
-  <!-- 保持原樣式：不新增頂部導航，沿用側欄與彈窗入口 -->
+  <!-- 手機版頂部列（僅小螢幕生效；桌面隱藏） -->
+  <div class="mobile-topbar" id="mobileTopbar" style="display:none;">
+    <button id="mobileMenuBtn" class="icon-btn" aria-label="選單"><i class="fas fa-bars"></i></button>
+    <button id="mobileBackBtn" class="icon-btn" aria-label="返回" style="display:none;"><i class="fas fa-arrow-left"></i></button>
+    <div class="mobile-title" id="mobileTitle">好友</div>
+  </div>
+  <div class="mobile-overlay" id="mobileOverlay"></div>
 
   <div class="chat-app">
     <nav class="chat-rail">

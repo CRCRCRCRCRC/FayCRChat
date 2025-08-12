@@ -85,6 +85,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }catch(_){ }
+
+    // 手機頂部列開關 & 行為（僅在 chat 頁有效）
+    if (location.pathname.includes('/chat')) {
+        const mTop = document.getElementById('mobileTopbar');
+        const mMenu = document.getElementById('mobileMenuBtn');
+        const mBack = document.getElementById('mobileBackBtn');
+        const mOverlay = document.getElementById('mobileOverlay');
+        if (mTop && mMenu && mBack && mOverlay) {
+            // 小螢幕顯示
+            const showTopbar = ()=>{ if (window.matchMedia('(max-width: 768px)').matches) mTop.style.display='flex'; else mTop.style.display='none'; };
+            showTopbar(); window.addEventListener('resize', showTopbar);
+            mMenu.onclick = ()=>{
+                document.querySelector('.chat-rail')?.classList.add('open');
+                mOverlay.style.display = 'block';
+            };
+            mOverlay.onclick = ()=>{
+                document.querySelector('.chat-rail')?.classList.remove('open');
+                mOverlay.style.display = 'none';
+            };
+            mBack.onclick = ()=>{
+                // 返回好友列表視圖
+                document.body.classList.remove('mobile-chat');
+                chatState.currentPeer = null;
+                switchRail('friends');
+                const title = document.getElementById('mobileTitle');
+                if (title) title.textContent = '好友';
+                mBack.style.display='none';
+            };
+        }
+    }
 });
 
 // 初始化認證狀態
@@ -1160,6 +1190,14 @@ function openConversation(peer){
     // 允許輸入並聚焦
     const input = document.getElementById('chatInput');
     if (input) { input.focus(); }
+    // 手機進入對話視圖
+    try{
+        if (window.matchMedia('(max-width: 768px)').matches){
+            document.body.classList.add('mobile-chat');
+            const title = document.getElementById('mobileTitle'); if (title) title.textContent = peer.username||'對話';
+            const back = document.getElementById('mobileBackBtn'); if (back) back.style.display='inline-flex';
+        }
+    }catch(_){ }
 }
 
 async function fetchMessages(){
