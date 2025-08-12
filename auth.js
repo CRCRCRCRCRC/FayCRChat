@@ -1060,12 +1060,16 @@ function switchRail(key){
     if (key === 'all'){
         title.textContent = '請從左邊選擇一位好友來對話';
         messages.innerHTML = '';
+        chatState.currentPeer = null; // 退出會話，停止訊息渲染
+        setComposerEnabled(false, '請先從左邊選擇好友');
         renderFriendList();
         return;
     }
     if (key === 'home'){
         title.textContent = '';
         messages.innerHTML = '';
+        chatState.currentPeer = null;
+        setComposerEnabled(false, '請從左邊選擇功能');
         listBox.innerHTML = `
           <div class="sidebar-card">
             <div class="sidebar-title">主頁</div>
@@ -1077,12 +1081,16 @@ function switchRail(key){
     if (key === 'friends'){
         title.textContent = '好友';
         messages.innerHTML = '';
+        chatState.currentPeer = null;
+        setComposerEnabled(false, '請先從左邊選擇好友');
         renderFriendList();
         return;
     }
     if (key === 'groups'){
         title.textContent = '群組';
         messages.innerHTML = '';
+        chatState.currentPeer = null;
+        setComposerEnabled(false, '請從左邊選擇功能');
         listBox.innerHTML = `
           <div class="sidebar-card">
             <div class="sidebar-title">群組</div>
@@ -1096,6 +1104,8 @@ function switchRail(key){
         messages.innerHTML = '';
         // 清空側欄內容
         listBox.innerHTML = '';
+        chatState.currentPeer = null;
+        setComposerEnabled(false, '偏好設定中');
         // 第六個（設定）：給你快速切換主題的示範
         const box = document.createElement('div');
         box.style.padding='1rem';
@@ -1117,13 +1127,14 @@ function openConversation(peer){
     document.getElementById('chatTitle').textContent = peer.username;
     document.getElementById('chatMessages').innerHTML = '';
     chatState.autoScroll = true;
+    setComposerEnabled(true, '輸入訊息...');
     fetchMessages();
     // 啟動增量輪詢，低延遲抓新訊息
     startMessagePolling();
     // SSE 無需切換頻道
     // 允許輸入並聚焦
     const input = document.getElementById('chatInput');
-    if (input) { input.disabled = false; input.placeholder = '輸入訊息...'; input.focus(); }
+    if (input) { input.focus(); }
 }
 
 async function fetchMessages(){
@@ -1191,7 +1202,7 @@ function wireChatSend(){
     const freshInput = document.getElementById('chatInput');
     if (freshInput) freshInput.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } }, { once: false });
     // 初始未選好友前禁用
-    if (freshInput) { freshInput.disabled = true; freshInput.placeholder = '請先從左邊選擇好友'; }
+    if (freshInput) { setComposerEnabled(false, '請先從左邊選擇好友'); }
 }
 
 // ===== 低延遲增量輪詢與已讀節流 =====
@@ -1342,6 +1353,15 @@ function isNearBottom(el, threshold=48){
     if (!el) return true;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     return distance <= threshold;
+}
+
+function setComposerEnabled(enabled, placeholder){
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    if (!input || !btn) return;
+    input.disabled = !enabled;
+    if (placeholder != null) input.placeholder = placeholder;
+    btn.disabled = !enabled;
 }
 
 // ===== Realtime (SSE) =====
