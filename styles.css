@@ -599,10 +599,12 @@ body.modal-open { overflow: hidden; }
 .chat-input{ display:flex; align-items:center; gap:.5rem; padding:1rem; border-top:1px solid rgba(255,255,255,.15); }
 .chat-input input{ flex:1; height:44px; padding:.6rem .8rem; border-radius:10px; border:1px solid rgba(255,255,255,.25); }
 .chat-input .btn{ height:44px; display:inline-flex; align-items:center; }
-.chat-preview-list{ display:flex; gap:.4rem; align-items:center; max-width:40%; overflow:auto; }
-.chat-preview-item{ position:relative; width:36px; height:36px; border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,.25); }
+.chat-preview-list{ display:flex; gap:.4rem; align-items:center; max-width:50%; overflow:auto; }
+.chat-preview-item{ position:relative; width:42px; height:42px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.25); background:#f1f5f9; }
 .chat-preview-item img{ width:100%; height:100%; object-fit:cover; display:block; }
 .chat-preview-remove{ position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:#fff; color:#111; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.3); }
+.chat-preview-add{ width:42px; height:42px; border-radius:10px; border:1px dashed rgba(255,255,255,.35); display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; background:rgba(255,255,255,.08); }
+.chat-preview-add:hover{ background:rgba(255,255,255,.12); }
 
 .chat-avatar-fab{ position:fixed; left:16px; bottom:16px; display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; z-index:2000; }
 .chat-avatar-fab img{ width:56px; height:56px; border-radius:50%; border:3px solid rgba(255,255,255,.6); cursor:pointer; box-shadow: var(--shadow-medium); }

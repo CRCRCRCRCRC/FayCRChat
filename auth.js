@@ -834,14 +834,20 @@ async function sendCurrentChatMessage(){
     if (!input || !btn) return; // UI 尚未掛載
     const text = (input.value || '').trim();
     let imageData = null; let imageMime = null;
-    let file = imgInput && imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
-    if (!file && window._pastedImageFile) { file = window._pastedImageFile; }
-    if (file) {
-        imageMime = file.type || 'image/png';
-        imageData = await fileToBase64(file);
+    // 收集最多 5 張圖片
+    const gatherFiles = [];
+    if (window._pastedImageFile) { gatherFiles.push(window._pastedImageFile); }
+    const fragList = document.getElementById('chatPreviewList');
+    // 已透過預覽選取的檔案保存在 selectedFiles（閉包內），因此改由暫存至 window 共享
+    const sel = window._selectedChatFiles || [];
+    for (const f of sel) { if (gatherFiles.length < 5) gatherFiles.push(f); }
+    if (gatherFiles.length === 1) {
+        const f = gatherFiles[0]; imageMime = f.type||'image/png'; imageData = await fileToBase64(f);
+    } else if (gatherFiles.length > 1) {
+        // 多張：僅支援一次送多張。這裡逐張送出，維持現有 API 簡單
     }
     if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
-    if (!text && !imageData) return;
+    if (!text && !imageData && (!window._selectedChatFiles || window._selectedChatFiles.length===0)) return;
     if (isSendingMessage) return; // 防雙觸發（Enter + Click、或多重綁定）
     isSendingMessage = true;
     if (!authToken) {
@@ -861,13 +867,26 @@ async function sendCurrentChatMessage(){
         if (resp.ok){
             input.value='';
             if (imgInput) imgInput.value = '';
-            window._pastedImageFile = null; const previewList = document.getElementById('chatPreviewList'); if (previewList) previewList.innerHTML='';
+            window._pastedImageFile = null; const previewList = document.getElementById('chatPreviewList'); if (previewList) previewList.innerHTML='<label id="chatAddTile" class="chat-preview-add" for="chatImageInput" title="新增圖片"><i class="fas fa-plus"></i></label>';
+            window._selectedChatFiles = [];
             // 使用伺服器回傳 id，避免之後增量拉取重複顯示
             let r = null;
             try { r = await resp.json(); } catch(_) {}
             const serverId = r && r.id ? r.id : null;
             const createdAt = r && r.createdAt ? r.createdAt : Date.now();
             appendMessages([{ id: serverId, sender_id: currentUser.id, receiver_id: chatState.currentPeer.id, content: text, created_at: createdAt, seen_at: null, image_data: imageData, image_mime: imageMime }]);
+            // 若選了多張，逐張補發（不包含第一張已送出的）
+            const rest = (window._selectedChatFiles||[]).slice(imageData?1:0);
+            for (const f of rest){
+                const cid = `${currentUser.id}-${chatState.currentPeer.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                const mime = f.type||'image/png';
+                const dataUrl = await fileToBase64(f);
+                const r2 = await fetch(`${API_BASE_URL}/messages`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: '', clientId: cid, image: dataUrl, imageMime: mime }) });
+                if (r2.ok){
+                    const jr = await r2.json().catch(()=>({}));
+                    appendMessages([{ id: jr.id||null, sender_id: currentUser.id, receiver_id: chatState.currentPeer.id, content: '', created_at: jr.createdAt||Date.now(), seen_at: null, image_data: dataUrl, image_mime: mime }]);
+                }
+            }
         }
         else {
             let detail = '';
@@ -1204,6 +1223,7 @@ function wireChatSend(){
     const btn = document.getElementById('chatSendBtn');
     const imgInput = document.getElementById('chatImageInput');
     const previewList = document.getElementById('chatPreviewList');
+    const addTile = document.getElementById('chatAddTile');
     if (btn) {
         btn.replaceWith(btn.cloneNode(true));
     }
@@ -1219,36 +1239,46 @@ function wireChatSend(){
     if (freshInput) { setComposerEnabled(false, '請先從左邊選擇好友'); }
 
     // 圖片選擇預覽
-    const refreshPreview = (file)=>{
+    const MAX_FILES = 5;
+    const selectedFiles = window._selectedChatFiles = window._selectedChatFiles || [];
+    const renderList = ()=>{
         if (!previewList) return;
-        previewList.innerHTML = '';
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev)=>{
-            const item = document.createElement('div');
-            item.className = 'chat-preview-item';
-            item.innerHTML = `<img src="${ev.target.result}" alt="preview"/><div class="chat-preview-remove" title="移除">×</div>`;
-            item.querySelector('.chat-preview-remove').onclick = ()=>{ imgInput.value=''; previewList.innerHTML=''; };
-            previewList.appendChild(item);
-        };
-        reader.readAsDataURL(file);
+        // 保留 addTile，其他先清掉
+        previewList.querySelectorAll('.chat-preview-item').forEach(n=>n.remove());
+        selectedFiles.slice(0, MAX_FILES).forEach((file, idx)=>{
+            const reader = new FileReader();
+            reader.onload = (ev)=>{
+                const item = document.createElement('div');
+                item.className = 'chat-preview-item';
+                item.innerHTML = `<img src="${ev.target.result}" alt="preview"/><div class=\"chat-preview-remove\" title=\"移除\">×</div>`;
+                item.querySelector('.chat-preview-remove').onclick = ()=>{ selectedFiles.splice(idx,1); renderList(); };
+                previewList.insertBefore(item, addTile);
+            };
+            reader.readAsDataURL(file);
+        });
+        // 控制 addTile 顯示（滿 5 張隱藏）
+        if (addTile) addTile.style.display = selectedFiles.length >= MAX_FILES ? 'none' : 'flex';
     };
-    if (imgInput) imgInput.addEventListener('change', ()=>{ const f = imgInput.files && imgInput.files[0]; refreshPreview(f); });
+    const pushFiles = (files)=>{
+        for (const f of files){
+            if (selectedFiles.length >= MAX_FILES) break;
+            if (!f.type || !f.type.startsWith('image/')) continue;
+            selectedFiles.push(f);
+        }
+        renderList();
+    };
+    if (imgInput) imgInput.addEventListener('change', ()=>{ const files = (imgInput.files||[]); pushFiles(files); imgInput.value=''; });
     // 貼上圖片支援
     if (freshInput) freshInput.addEventListener('paste', (e)=>{
         const items = e.clipboardData && e.clipboardData.items;
         if (!items) return;
+        const files = [];
         for (const it of items){
             if (it.type && it.type.startsWith('image/')){
-                const file = it.getAsFile();
-                if (!file) continue;
-                // 放入預覽；無法直接填到 file input，改由 send 時讀取暫存
-                window._pastedImageFile = file;
-                refreshPreview(file);
-                e.preventDefault();
-                break;
+                const file = it.getAsFile(); if (file) files.push(file);
             }
         }
+        if (files.length){ pushFiles(files); e.preventDefault(); }
     });
 }
 
