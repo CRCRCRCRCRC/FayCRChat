@@ -454,7 +454,7 @@ app.post('/api/messages', authenticateToken, messagesLimiter, async (req, res) =
     try {
         const { toUserId, content, clientId, image, imageMime } = req.body;
         const receiverId = Number(toUserId);
-        const text = (content || '').toString();
+        const text = typeof content === 'string' ? content : '';
         const hasImage = !!(image && String(image).length);
         if (!Number.isFinite(receiverId) || (!text.trim() && !hasImage)) {
             return res.status(400).json({ error: 'BAD_REQUEST', message: '收件人或內容/圖片無效' });

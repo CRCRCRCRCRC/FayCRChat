@@ -834,17 +834,13 @@ async function sendCurrentChatMessage(){
     if (!input || !btn) return; // UI 尚未掛載
     const text = (input.value || '').trim();
     let imageData = null; let imageMime = null;
-    // 收集最多 5 張圖片
-    const gatherFiles = [];
-    if (window._pastedImageFile) { gatherFiles.push(window._pastedImageFile); }
-    const fragList = document.getElementById('chatPreviewList');
-    // 已透過預覽選取的檔案保存在 selectedFiles（閉包內），因此改由暫存至 window 共享
-    const sel = window._selectedChatFiles || [];
-    for (const f of sel) { if (gatherFiles.length < 5) gatherFiles.push(f); }
-    if (gatherFiles.length === 1) {
-        const f = gatherFiles[0]; imageMime = f.type||'image/png'; imageData = await fileToBase64(f);
-    } else if (gatherFiles.length > 1) {
-        // 多張：僅支援一次送多張。這裡逐張送出，維持現有 API 簡單
+    // 收集最多 5 張圖片：優先使用預覽選擇的檔案
+    let gatherFiles = (window._selectedChatFiles || []).slice(0, 5);
+    if (!gatherFiles.length && window._pastedImageFile) gatherFiles = [window._pastedImageFile];
+    if (gatherFiles.length >= 1) {
+        const first = gatherFiles[0];
+        imageMime = first.type || 'image/png';
+        imageData = await fileToBase64(first);
     }
     if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
     if (!text && !imageData && (!window._selectedChatFiles || window._selectedChatFiles.length===0)) return;
@@ -876,7 +872,7 @@ async function sendCurrentChatMessage(){
             const createdAt = r && r.createdAt ? r.createdAt : Date.now();
             appendMessages([{ id: serverId, sender_id: currentUser.id, receiver_id: chatState.currentPeer.id, content: text, created_at: createdAt, seen_at: null, image_data: imageData, image_mime: imageMime }]);
             // 若選了多張，逐張補發（不包含第一張已送出的）
-            const rest = (window._selectedChatFiles||[]).slice(imageData?1:0);
+            const rest = gatherFiles.slice(1);
             for (const f of rest){
                 const cid = `${currentUser.id}-${chatState.currentPeer.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
                 const mime = f.type||'image/png';
