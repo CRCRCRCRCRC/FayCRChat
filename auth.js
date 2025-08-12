@@ -830,10 +830,17 @@ let isSendingMessage = false; // 防重入，避免重複送出
 async function sendCurrentChatMessage(){
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
+    const imgInput = document.getElementById('chatImageInput');
     if (!input || !btn) return; // UI 尚未掛載
     const text = (input.value || '').trim();
+    let imageData = null; let imageMime = null;
+    const file = imgInput && imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
+    if (file) {
+        imageMime = file.type || 'image/png';
+        imageData = await fileToBase64(file);
+    }
     if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
-    if (!text) return;
+    if (!text && !imageData) return;
     if (isSendingMessage) return; // 防雙觸發（Enter + Click、或多重綁定）
     isSendingMessage = true;
     if (!authToken) {
@@ -848,16 +855,17 @@ async function sendCurrentChatMessage(){
         const resp = await fetch(`${API_BASE_URL}/messages`, {
             method:'POST',
             headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` },
-            body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text, clientId })
+            body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text, clientId, image: imageData, imageMime })
         });
         if (resp.ok){
             input.value='';
+            if (imgInput) imgInput.value = '';
             // 使用伺服器回傳 id，避免之後增量拉取重複顯示
             let r = null;
             try { r = await resp.json(); } catch(_) {}
             const serverId = r && r.id ? r.id : null;
             const createdAt = r && r.createdAt ? r.createdAt : Date.now();
-            appendMessages([{ id: serverId, sender_id: currentUser.id, receiver_id: chatState.currentPeer.id, content: text, created_at: createdAt, seen_at: null }]);
+            appendMessages([{ id: serverId, sender_id: currentUser.id, receiver_id: chatState.currentPeer.id, content: text, created_at: createdAt, seen_at: null, image_data: imageData, image_mime: imageMime }]);
         }
         else {
             let detail = '';
@@ -1168,9 +1176,11 @@ function renderMessages(list){
         if (m.id != null) row.dataset.msgId = String(m.id);
         row.dataset.fromMe = mine ? 'true' : 'false';
         row.dataset.seen = m.seen_at ? 'true' : 'false';
+        // 文本與圖片併顯示
+        const imgHtml = (m.image_data ? `<div style="margin-top:4px"><img src="${m.image_data}" alt="image" style="max-width:360px;max-height:240px;border-radius:8px;display:block"/></div>` : '');
         row.innerHTML = mine
-            ? `<div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div>`
-            : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
+            ? `<div class="bubble">${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div>`
+            : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
         box.appendChild(row);
         if (m.id && m.id > maxId) maxId = m.id;
         if (m.id) chatState.renderedIdSetByPeer[chatState.currentPeer.id].add(m.id);
@@ -1269,9 +1279,10 @@ function appendMessages(list){
         if (m.id != null) row.dataset.msgId = String(m.id);
         row.dataset.fromMe = mine ? 'true' : 'false';
         row.dataset.seen = m.seen_at ? 'true' : 'false';
+        const imgHtml = (m.image_data ? `<div style=\"margin-top:4px\"><img src=\"${m.image_data}\" alt=\"image\" style=\"max-width:360px;max-height:240px;border-radius:8px;display:block\"/></div>` : '');
         row.innerHTML = mine
-            ? `<div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div>`
-            : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
+            ? `<div class="bubble">${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div>`
+            : `<img src="${chatState.currentPeer.avatar||''}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble">${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
         box.appendChild(row);
         if (m.id && m.id > maxId) maxId = m.id;
         if (m.id) rendered.add(m.id);

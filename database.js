@@ -44,6 +44,9 @@ async function ensureTables() {
     `;
     // 用於客戶端冪等：避免重複插入同一則訊息
     await sql`alter table messages add column if not exists client_id text unique`;
+    // 圖片訊息（Base64 Data URL 或純 base64），與 MIME
+    await sql`alter table messages add column if not exists image_data text`;
+    await sql`alter table messages add column if not exists image_mime text`;
 }
 
 // 由暱稱產生基底 handle：只保留英文字母（a-z），轉小寫；空則回退 'user'
@@ -306,18 +309,19 @@ class Database {
     }
 
     // ====== Messaging ======
-    async sendMessage(senderId, toUserId, content, clientId = null) {
+    async sendMessage(senderId, toUserId, content, clientId = null, imageData = null, imageMime = null) {
         await this._init;
         const receiverId = Number(toUserId);
         const text = (content || '').toString();
-        if (!Number.isFinite(receiverId) || !text.trim()) {
+        const hasImage = !!(imageData && String(imageData).length);
+        if (!Number.isFinite(receiverId) || (!text.trim() && !hasImage)) {
             throw new Error('INVALID_INPUT');
         }
         let rows;
         if (clientId) {
             rows = await sql`
-                insert into messages (sender_id, receiver_id, content, client_id)
-                values (${senderId}, ${receiverId}, ${text}, ${clientId})
+                insert into messages (sender_id, receiver_id, content, client_id, image_data, image_mime)
+                values (${senderId}, ${receiverId}, ${text}, ${clientId}, ${hasImage ? imageData : null}, ${hasImage ? imageMime : null})
                 on conflict (client_id) do nothing
                 returning id, created_at`;
             if (!rows.length) {
@@ -325,7 +329,7 @@ class Database {
                 rows = await sql`select id, created_at from messages where client_id = ${clientId} limit 1`;
             }
         } else {
-            rows = await sql`insert into messages (sender_id, receiver_id, content) values (${senderId}, ${receiverId}, ${text}) returning id, created_at`;
+            rows = await sql`insert into messages (sender_id, receiver_id, content, image_data, image_mime) values (${senderId}, ${receiverId}, ${text}, ${hasImage ? imageData : null}, ${hasImage ? imageMime : null}) returning id, created_at`;
         }
         return { id: rows[0].id, createdAt: rows[0].created_at };
     }
@@ -336,7 +340,7 @@ class Database {
         let rows;
         if (afterId != null) {
             rows = await sql`
-                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
+                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at, m.image_data, m.image_mime
                 from messages m
                 where ((m.sender_id = ${userId} and m.receiver_id = ${withUserId})
                    or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId}))
@@ -346,7 +350,7 @@ class Database {
             return rows; // already asc for incremental append
         } else if (beforeId != null) {
             rows = await sql`
-                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
+                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at, m.image_data, m.image_mime
                 from messages m
                 where ((m.sender_id = ${userId} and m.receiver_id = ${withUserId})
                    or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId}))
@@ -356,7 +360,7 @@ class Database {
             return rows.reverse();
         } else {
             rows = await sql`
-                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at
+                select m.id, m.sender_id, m.receiver_id, m.content, m.created_at, m.seen_at, m.image_data, m.image_mime
                 from messages m
                 where (m.sender_id = ${userId} and m.receiver_id = ${withUserId})
                    or  (m.sender_id = ${withUserId} and m.receiver_id = ${userId})

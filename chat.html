@@ -53,6 +53,10 @@
       <div class="chat-messages" id="chatMessages"></div>
       <footer class="chat-input">
         <input id="chatInput" type="text" placeholder="輸入訊息..." />
+        <label class="btn btn-secondary" for="chatImageInput" style="display:inline-flex;align-items:center;gap:.4rem;">
+          <i class="fas fa-image"></i> 圖片
+        </label>
+        <input id="chatImageInput" type="file" accept="image/*" style="display:none" />
         <button id="chatSendBtn" class="btn btn-primary">傳送</button>
       </footer>
     </section>

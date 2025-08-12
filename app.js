@@ -452,17 +452,18 @@ app.get('/api/messages', authenticateToken, messagesLimiter, async (req, res) =>
 // 傳送訊息
 app.post('/api/messages', authenticateToken, messagesLimiter, async (req, res) => {
     try {
-        const { toUserId, content, clientId } = req.body;
+        const { toUserId, content, clientId, image, imageMime } = req.body;
         const receiverId = Number(toUserId);
         const text = (content || '').toString();
-        if (!Number.isFinite(receiverId) || !text.trim()) {
-            return res.status(400).json({ error: 'BAD_REQUEST', message: '收件人或內容無效' });
+        const hasImage = !!(image && String(image).length);
+        if (!Number.isFinite(receiverId) || (!text.trim() && !hasImage)) {
+            return res.status(400).json({ error: 'BAD_REQUEST', message: '收件人或內容/圖片無效' });
         }
-        const r = await database.sendMessage(req.user.userId, receiverId, text, clientId || null);
+        const r = await database.sendMessage(req.user.userId, receiverId, text, clientId || null, hasImage ? image : null, hasImage ? (imageMime || 'image/png') : null);
         // 回傳標準化欄位（含 id），供前端去重
         res.json({ success: true, id: r.id, createdAt: r.createdAt });
         // SSE 推播給接收者
-        try { broadcastToUser(receiverId, 'new_message', { id: r.id, sender_id: req.user.userId, receiver_id: receiverId, content: text, created_at: r.createdAt }); } catch(_) {}
+        try { broadcastToUser(receiverId, 'new_message', { id: r.id, sender_id: req.user.userId, receiver_id: receiverId, content: text, created_at: r.createdAt, image_data: hasImage ? image : null, image_mime: hasImage ? (imageMime || 'image/png') : null }); } catch(_) {}
     } catch (e) {
         console.error('POST /api/messages error:', e);
         res.status(500).json({ error: 'SEND_FAILED', message: e.message || '發送失敗' });
