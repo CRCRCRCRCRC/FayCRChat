@@ -22,6 +22,13 @@
   <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js" defer></script>
 </head>
 <body>
+  <!-- 手機頂欄（桌面隱藏）-->
+  <div id="mobileTopbar" class="mobile-topbar">
+    <button id="mobileMenuBtn" class="icon-btn" aria-label="功能"><i class="fas fa-bars"></i></button>
+    <button id="mobileBackBtn" class="icon-btn" aria-label="返回" style="display:none"><i class="fas fa-arrow-left"></i></button>
+    <div id="mobileTitle" class="mobile-title">好友</div>
+  </div>
+  <div id="mobileOverlay" class="mobile-overlay"></div>
   <!-- 保持原樣式：不新增頂部導航，沿用側欄與彈窗入口 -->
 
   <div class="chat-app">
