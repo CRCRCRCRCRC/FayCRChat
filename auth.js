@@ -96,14 +96,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // 小螢幕顯示
             const showTopbar = ()=>{ if (window.matchMedia('(max-width: 768px)').matches) mTop.style.display='flex'; else mTop.style.display='none'; };
             showTopbar(); window.addEventListener('resize', showTopbar);
-            mMenu.onclick = ()=>{
-                document.querySelector('.chat-rail')?.classList.add('open');
-                mOverlay.style.display = 'block';
-            };
-            mOverlay.onclick = ()=>{
-                document.querySelector('.chat-rail')?.classList.remove('open');
-                mOverlay.style.display = 'none';
-            };
+            const rail = document.querySelector('.chat-rail');
+            const openDrawer = ()=>{ rail?.classList.add('open'); mOverlay.style.display='block'; };
+            const closeDrawer = ()=>{ rail?.classList.remove('open'); mOverlay.style.display='none'; };
+            mMenu.onclick = ()=>{ (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer(); };
+            mOverlay.onclick = closeDrawer;
             mBack.onclick = ()=>{
                 // 返回好友列表視圖
                 document.body.classList.remove('mobile-chat');
