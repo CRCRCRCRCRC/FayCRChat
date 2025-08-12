@@ -973,17 +973,6 @@ function mountChatUI() {
     }
     // 啟用 SSE 實時
     initSSE();
-    // 手機：三條線抽屜 & 返回邏輯
-    const mMenu = document.getElementById('mobileMenuBtn');
-    const mBack = document.getElementById('mobileBackBtn');
-    const mTitle = document.getElementById('mobileTitle');
-    const mOverlay = document.getElementById('mobileOverlay');
-    const rail = document.querySelector('.chat-rail');
-    const openDrawer = ()=>{ if (rail){ rail.classList.add('open'); if(mOverlay) mOverlay.style.display='block'; } };
-    const closeDrawer = ()=>{ if (rail){ rail.classList.remove('open'); if(mOverlay) mOverlay.style.display='none'; } };
-    if (mMenu) mMenu.onclick = ()=>{ openDrawer(); };
-    if (mOverlay) mOverlay.onclick = ()=>{ closeDrawer(); };
-    if (mBack) mBack.onclick = ()=>{ chatState.currentPeer=null; document.getElementById('chatMessages').innerHTML=''; setComposerEnabled(false,'請先從左邊選擇好友'); mBack.style.display='none'; if(mTitle) mTitle.textContent='好友'; switchRail('friends'); };
     // 週期刷新通知徽標（提高即時性）
     refreshNotifications();
     if (window._notifTimer) clearInterval(window._notifTimer);
@@ -1171,13 +1160,6 @@ function openConversation(peer){
     // 允許輸入並聚焦
     const input = document.getElementById('chatInput');
     if (input) { input.focus(); }
-    // 手機：切成會話視圖，顯示返回鈕、更新標題
-    const mBack = document.getElementById('mobileBackBtn');
-    const mTitle = document.getElementById('mobileTitle');
-    const rail = document.querySelector('.chat-rail');
-    if (mBack) mBack.style.display='inline-flex';
-    if (mTitle) mTitle.textContent = peer.username || '對話';
-    if (rail) rail.classList.remove('open');
 }
 
 async function fetchMessages(){
