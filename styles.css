@@ -606,6 +606,28 @@ body.modal-open { overflow: hidden; }
 .chat-preview-add{ width:42px; height:42px; border-radius:10px; border:1px dashed rgba(255,255,255,.35); display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; background:rgba(255,255,255,.08); }
 .chat-preview-add:hover{ background:rgba(255,255,255,.12); }
 
+/* 手機響應式：<= 768px */
+@media (max-width: 768px) {
+  .chat-app{ flex-direction: column; height: 100vh; padding-bottom: 64px; }
+  .chat-rail{ position: fixed; bottom: 0; left: 0; right: 0; height: 60px; width: 100%; flex-direction: row; gap: 10px; justify-content: space-around; padding: 8px 10px; border-right: 0; border-top: 1px solid rgba(255,255,255,.08); z-index: 1000; }
+  .rail-bottom{ margin-top: 0; flex-direction: row; gap: 10px; }
+  .chat-sidebar{ width: 100%; height: 34vh; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.15); padding: .75rem; }
+  .chat-main{ flex: 1; display: flex; flex-direction: column; }
+  .chat-header{ padding:.75rem 1rem; }
+  .chat-messages{ padding: .75rem; }
+  .chat-input{ padding: .6rem .75rem; gap:.4rem; }
+  .chat-input input{ height: 42px; }
+  .rail-item{ width: 40px; height: 40px; }
+  .chat-preview-list{ max-width: 60%; }
+}
+
+/* 超小手機：<= 480px */
+@media (max-width: 480px) {
+  .chat-sidebar{ height: 38vh; }
+  .chat-preview-item, .chat-preview-add{ width: 38px; height: 38px; border-radius: 8px; }
+  .rail-item{ width: 38px; height: 38px; }
+}
+
 .chat-avatar-fab{ position:fixed; left:16px; bottom:16px; display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; z-index:2000; }
 .chat-avatar-fab img{ width:56px; height:56px; border-radius:50%; border:3px solid rgba(255,255,255,.6); cursor:pointer; box-shadow: var(--shadow-medium); }
 .chat-fab-menu{ display:none; flex-direction:column; gap:.4rem; }
