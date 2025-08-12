@@ -834,7 +834,8 @@ async function sendCurrentChatMessage(){
     if (!input || !btn) return; // UI 尚未掛載
     const text = (input.value || '').trim();
     let imageData = null; let imageMime = null;
-    const file = imgInput && imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
+    let file = imgInput && imgInput.files && imgInput.files[0] ? imgInput.files[0] : null;
+    if (!file && window._pastedImageFile) { file = window._pastedImageFile; }
     if (file) {
         imageMime = file.type || 'image/png';
         imageData = await fileToBase64(file);
@@ -860,6 +861,7 @@ async function sendCurrentChatMessage(){
         if (resp.ok){
             input.value='';
             if (imgInput) imgInput.value = '';
+            window._pastedImageFile = null; const previewList = document.getElementById('chatPreviewList'); if (previewList) previewList.innerHTML='';
             // 使用伺服器回傳 id，避免之後增量拉取重複顯示
             let r = null;
             try { r = await resp.json(); } catch(_) {}
@@ -1200,6 +1202,8 @@ function renderMessages(list){
 function wireChatSend(){
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
+    const imgInput = document.getElementById('chatImageInput');
+    const previewList = document.getElementById('chatPreviewList');
     if (btn) {
         btn.replaceWith(btn.cloneNode(true));
     }
@@ -1213,6 +1217,39 @@ function wireChatSend(){
     if (freshInput) freshInput.addEventListener('keydown', e=>{ if (e.isComposing || e.keyCode===229) return; if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendCurrentChatMessage(); } }, { once: false });
     // 初始未選好友前禁用
     if (freshInput) { setComposerEnabled(false, '請先從左邊選擇好友'); }
+
+    // 圖片選擇預覽
+    const refreshPreview = (file)=>{
+        if (!previewList) return;
+        previewList.innerHTML = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev)=>{
+            const item = document.createElement('div');
+            item.className = 'chat-preview-item';
+            item.innerHTML = `<img src="${ev.target.result}" alt="preview"/><div class="chat-preview-remove" title="移除">×</div>`;
+            item.querySelector('.chat-preview-remove').onclick = ()=>{ imgInput.value=''; previewList.innerHTML=''; };
+            previewList.appendChild(item);
+        };
+        reader.readAsDataURL(file);
+    };
+    if (imgInput) imgInput.addEventListener('change', ()=>{ const f = imgInput.files && imgInput.files[0]; refreshPreview(f); });
+    // 貼上圖片支援
+    if (freshInput) freshInput.addEventListener('paste', (e)=>{
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        for (const it of items){
+            if (it.type && it.type.startsWith('image/')){
+                const file = it.getAsFile();
+                if (!file) continue;
+                // 放入預覽；無法直接填到 file input，改由 send 時讀取暫存
+                window._pastedImageFile = file;
+                refreshPreview(file);
+                e.preventDefault();
+                break;
+            }
+        }
+    });
 }
 
 // ===== 低延遲增量輪詢與已讀節流 =====
