@@ -97,8 +97,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const showTopbar = ()=>{ if (window.matchMedia('(max-width: 768px)').matches) mTop.style.display='flex'; else mTop.style.display='none'; };
             showTopbar(); window.addEventListener('resize', showTopbar);
             const rail = document.querySelector('.chat-rail');
-            const openDrawer = ()=>{ rail?.classList.add('open'); mOverlay.style.display='block'; };
-            const closeDrawer = ()=>{ rail?.classList.remove('open'); mOverlay.style.display='none'; };
+            const openDrawer = ()=>{ if (rail) rail.classList.add('open'); mOverlay.style.display='block'; };
+            const closeDrawer = ()=>{ if (rail) rail.classList.remove('open'); mOverlay.style.display='none'; };
             mMenu.onclick = ()=>{ (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer(); };
             mOverlay.onclick = closeDrawer;
             // 防止抽屜攔截點擊：讓 .chat-rail 內部點擊不改變視圖，僅由我們的 handler 控制
