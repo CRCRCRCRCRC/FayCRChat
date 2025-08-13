@@ -615,7 +615,7 @@ body.modal-open { overflow: hidden; }
   .mobile-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1050; }
 
   .chat-app{ flex-direction: row; height: 100vh; padding-top: 52px; }
-  .chat-rail{ position: fixed; top: 52px; bottom: 0; left: -220px; width: 220px; background:#24272c; padding:12px; gap:12px; transition: left .25s ease; z-index: 1100; border-right:1px solid rgba(255,255,255,.12); }
+  .chat-rail{ position: fixed; top: 52px; bottom: 0; left: -72px; width: 72px; background:#24272c; padding:12px 0; gap:12px; transition: left .25s ease; z-index: 1100; border-right:1px solid rgba(255,255,255,.12); }
   .chat-rail.open{ left: 0; }
   .rail-bottom{ margin-top:auto; }
   .chat-sidebar{ width: 100%; max-width:none; border-right:0; }
