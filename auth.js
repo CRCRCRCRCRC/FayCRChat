@@ -937,16 +937,14 @@ function mountChatUI() {
     // chat.html 已包含完整結構，無需再動態 clone 節點
     // 側邊軌道切換
     document.querySelectorAll('.rail-item').forEach(btn=>{
-        btn.addEventListener('click', (e)=>{
-            e.preventDefault();
-            e.stopPropagation();
-            document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
-            btn.classList.add('is-active');
-            const key = btn.getAttribute('data-rail');
-            chatState.activeRail = key;
-            switchRail(key);
-            // 手機上點選後自動關閉抽屜
+        const onPress = (e)=>{
             try{
+                if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); }
+                document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
+                btn.classList.add('is-active');
+                const key = btn.getAttribute('data-rail');
+                chatState.activeRail = key;
+                switchRail(key);
                 if (window.matchMedia('(max-width: 768px)').matches){
                     const rail = document.querySelector('.chat-rail');
                     const overlay = document.getElementById('mobileOverlay');
@@ -954,7 +952,11 @@ function mountChatUI() {
                     if (overlay) overlay.style.display='none';
                 }
             }catch(_){ }
-        });
+            return false;
+        };
+        btn.addEventListener('pointerdown', onPress, { passive: false });
+        btn.addEventListener('click', onPress, { passive: false });
+        btn.addEventListener('touchend', onPress, { passive: false });
     });
     // 導航欄底部：通知與頭像
     const railNotif = document.getElementById('railNotifBtn');
