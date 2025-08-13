@@ -1209,7 +1209,7 @@ async function fetchMessages(){
             else if (resp.status === 401 || resp.status === 403) { showAlert('登入已過期或權限不足，請重新登入'); showLogin(); }
             else { showAlert(d.message || '載入訊息失敗'); }
         }
-    }catch(err){ showAlert('網路異常，請稍後再試'); }
+    }catch(err){ console.warn('fetchMessages network error:', err); }
 }
 
 function renderMessages(list){
@@ -1338,7 +1338,7 @@ function startMessagePolling(){
                 else renderReadReceipt(); // 即使沒新訊息也刷新已讀指示
                 resetPollBackoff();
             }
-        }catch(_){ }
+        }catch(err){ /* 靜默網路抖動 */ }
     }, backoffMs);
 }
 function stopMessagePolling(){ if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
