@@ -101,6 +101,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const closeDrawer = ()=>{ rail?.classList.remove('open'); mOverlay.style.display='none'; };
             mMenu.onclick = ()=>{ (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer(); };
             mOverlay.onclick = closeDrawer;
+            // 防止抽屜攔截點擊：讓 .chat-rail 內部點擊不改變視圖，僅由我們的 handler 控制
+            const railContainer = document.querySelector('.chat-rail');
+            if (railContainer) {
+                railContainer.addEventListener('click', (e)=>{
+                    e.stopPropagation();
+                });
+            }
             mBack.onclick = ()=>{
                 // 返回好友列表視圖
                 document.body.classList.remove('mobile-chat');
@@ -930,12 +937,23 @@ function mountChatUI() {
     // chat.html 已包含完整結構，無需再動態 clone 節點
     // 側邊軌道切換
     document.querySelectorAll('.rail-item').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
+        btn.addEventListener('click', (e)=>{
+            e.preventDefault();
+            e.stopPropagation();
             document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
             btn.classList.add('is-active');
             const key = btn.getAttribute('data-rail');
             chatState.activeRail = key;
             switchRail(key);
+            // 手機上點選後自動關閉抽屜
+            try{
+                if (window.matchMedia('(max-width: 768px)').matches){
+                    const rail = document.querySelector('.chat-rail');
+                    const overlay = document.getElementById('mobileOverlay');
+                    if (rail) rail.classList.remove('open');
+                    if (overlay) overlay.style.display='none';
+                }
+            }catch(_){ }
         });
     });
     // 導航欄底部：通知與頭像
@@ -1083,7 +1101,13 @@ async function loadFriends(){
     try{
         const resp = await fetch(`${API_BASE_URL}/friends`, { headers:{ Authorization:`Bearer ${authToken}` } });
         const d = await resp.json();
-        if (resp.ok){ chatState.friends = d.friends||[]; renderFriendList(); }
+        if (resp.ok){
+            chatState.friends = d.friends||[];
+            const ar = chatState.activeRail;
+            if (!ar || ar === 'all' || ar === 'friends') {
+                renderFriendList();
+            }
+        }
     }catch(_){ }
 }
 
@@ -1109,6 +1133,10 @@ function switchRail(key){
     const listBox = document.getElementById('sidebarContent');
     const title = document.getElementById('chatTitle');
     const messages = document.getElementById('chatMessages');
+		let isMobile = false;
+		try { isMobile = window.matchMedia('(max-width: 768px)').matches; } catch(_) { isMobile = false; }
+		const nonChatContainer = isMobile ? listBox : messages;
+		const mTitle = document.getElementById('mobileTitle');
     if (key === 'all'){
         title.textContent = '請從左邊選擇一位好友來對話';
         messages.innerHTML = '';
@@ -1120,14 +1148,16 @@ function switchRail(key){
     if (key === 'home'){
         title.textContent = '';
         messages.innerHTML = '';
-        chatState.currentPeer = null;
-        setComposerEnabled(false, '請從左邊選擇功能');
-        listBox.innerHTML = `
+			listBox.innerHTML = '';
+			chatState.currentPeer = null;
+			setComposerEnabled(false, '請從左邊選擇功能');
+			nonChatContainer.innerHTML = `
           <div class="sidebar-card">
             <div class="sidebar-title">主頁</div>
             <div class="sidebar-sub">按下左側第一個按鈕，選擇好友開始聊天，或在通知中接受好友邀請。</div>
           </div>
         `;
+			if (mTitle) mTitle.textContent = '主頁';
         return;
     }
     if (key === 'friends'){
@@ -1141,24 +1171,24 @@ function switchRail(key){
     if (key === 'groups'){
         title.textContent = '群組';
         messages.innerHTML = '';
-        chatState.currentPeer = null;
-        setComposerEnabled(false, '請從左邊選擇功能');
-        listBox.innerHTML = `
+			listBox.innerHTML = '';
+			chatState.currentPeer = null;
+			setComposerEnabled(false, '請從左邊選擇功能');
+			nonChatContainer.innerHTML = `
           <div class="sidebar-card">
             <div class="sidebar-title">群組</div>
             <div class="sidebar-sub">即將推出</div>
           </div>
         `;
+			if (mTitle) mTitle.textContent = '群組';
         return;
     }
     if (key === 'settings'){
         title.textContent = '偏好設定';
         messages.innerHTML = '';
-        // 清空側欄內容
-        listBox.innerHTML = '';
-        chatState.currentPeer = null;
-        setComposerEnabled(false, '偏好設定中');
-        // 第六個（設定）：給你快速切換主題的示範
+			listBox.innerHTML = '';
+			chatState.currentPeer = null;
+			setComposerEnabled(false, '偏好設定中');
         const box = document.createElement('div');
         box.style.padding='1rem';
         box.innerHTML = `
@@ -1167,9 +1197,29 @@ function switchRail(key){
             <button id="themeDark" class="btn btn-secondary">深色</button>
           </div>
         `;
-        messages.appendChild(box);
-        document.getElementById('themeLight').onclick = ()=> document.body.classList.remove('theme-dark');
-        document.getElementById('themeDark').onclick = ()=> document.body.classList.add('theme-dark');
+			(nonChatContainer || messages).appendChild(box);
+			const lightBtn = document.getElementById('themeLight');
+			const darkBtn = document.getElementById('themeDark');
+			if (lightBtn) lightBtn.onclick = ()=> document.body.classList.remove('theme-dark');
+			if (darkBtn) darkBtn.onclick = ()=> document.body.classList.add('theme-dark');
+			if (mTitle) mTitle.textContent = '設定';
+			return;
+		}
+
+		// 探索（尚未實作）：佔位內容
+		if (key === 'explore'){
+			title.textContent = '探索';
+			messages.innerHTML = '';
+			listBox.innerHTML = '';
+			chatState.currentPeer = null;
+			setComposerEnabled(false, '探索功能開發中');
+			nonChatContainer.innerHTML = `
+			  <div class="sidebar-card">
+			    <div class="sidebar-title">探索</div>
+			    <div class="sidebar-sub">功能開發中，敬請期待。</div>
+			  </div>
+			`;
+			if (mTitle) mTitle.textContent = '探索';
         return;
     }
 }
