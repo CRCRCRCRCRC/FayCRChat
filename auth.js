@@ -884,7 +884,7 @@ function updateUIForLoggedInUser() {
 }
 
 // ============ Chat ============
-let chatState = { currentPeer: null, friends: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {}, autoScroll: true, activeRail: 'all' };
+let chatState = { currentPeer: null, currentGroupId: null, friends: [], groups: [], requests: [], lastMsgIdByPeer: {}, renderedIdSetByPeer: {}, lastGroupMsgIdByGroup: {}, renderedGroupIdSetByGroup: {}, autoScroll: true, activeRail: 'all' };
 let isSendingMessage = false; // 防重入，避免重複送出
 
 // 共用：送出目前輸入框的訊息（提供多處綁定呼叫）
@@ -1196,7 +1196,7 @@ function renderGroupList(){
         item.className='item';
         const avatar = g.avatar || generateAvatarDataUrl((g.name||'G')[0]||'G');
         item.innerHTML = `<img class="avatar" src="${avatar}"/><div class="name">${g.name}</div>`;
-        // 後續：點擊可進入群組聊天（尚未實作）
+        item.onclick = ()=> openGroupConversation(g);
         list.appendChild(item);
     });
 }
@@ -1381,9 +1381,9 @@ function switchRail(key){
         }
         // 載入群組列表
         fetchGroups().then(renderGroupList);
-        // 右側 B+C 區改為顯示提示（避免看起來沒反應）
+        // 右側主要內容改為顯示提示（避免看起來沒反應）
         nonChatContainer.innerHTML = `
-          <div style="padding:1rem; color:#fff; opacity:.9">請在 A 區選擇或建立群組</div>
+          <div style="padding:1rem; color:#fff; opacity:.9">請在左側選擇或建立群組</div>
         `;
         return;
     }
@@ -1433,6 +1433,7 @@ function switchRail(key){
 
 function openConversation(peer){
     chatState.currentPeer = peer;
+    chatState.currentGroupId = null;
     document.getElementById('chatTitle').textContent = peer.username;
     document.getElementById('chatMessages').innerHTML = '';
     chatState.autoScroll = true;
@@ -1456,6 +1457,20 @@ function openConversation(peer){
     }catch(_){ }
 }
 
+function openGroupConversation(group){
+    chatState.currentGroupId = group.id;
+    chatState.currentPeer = null;
+    document.getElementById('chatTitle').textContent = group.name;
+    const box = document.getElementById('chatMessages');
+    if (box) box.innerHTML = '';
+    setComposerEnabled(true, '輸入群組訊息...');
+    const composer = document.querySelector('.chat-input');
+    if (composer) composer.style.display = 'flex';
+    // 載入群組訊息
+    fetchGroupMessages();
+    startGroupPolling();
+}
+
 async function fetchMessages(){
     if (!chatState.currentPeer) return;
     try{
@@ -1469,6 +1484,72 @@ async function fetchMessages(){
             else { showAlert(d.message || '載入訊息失敗'); }
         }
     }catch(err){ console.warn('fetchMessages network error:', err); }
+}
+
+async function fetchGroupMessages(){
+    if (!chatState.currentGroupId) return;
+    try{
+        const resp = await fetch(`${API_BASE_URL}/group-messages?groupId=${encodeURIComponent(chatState.currentGroupId)}`, { headers:{ Authorization:`Bearer ${authToken}` } });
+        let d = {};
+        try { d = await resp.json(); } catch(_) {}
+        if (resp.ok){ renderGroupMessages(d.messages||[]); }
+    }catch(_){ }
+}
+
+function renderGroupMessages(list){
+    const box = document.getElementById('chatMessages');
+    const shouldStick = isNearBottom(box, 64);
+    const prevTop = box.scrollTop;
+    const prevHeight = box.scrollHeight;
+    box.innerHTML = '';
+    let maxId = chatState.lastGroupMsgIdByGroup[chatState.currentGroupId] || 0;
+    chatState.renderedGroupIdSetByGroup[chatState.currentGroupId] = new Set();
+    list.forEach(m=>{
+        const mine = m.sender_id === currentUser.id;
+        const row = document.createElement('div');
+        row.className = `msg ${mine?'me':'peer'}`;
+        if (m.id != null) row.dataset.msgId = String(m.id);
+        const avatar = mine ? (currentUser.avatar||'') : (m.sender_avatar||'');
+        const name = mine ? (currentUser.username||'我') : (m.sender_name||'成員');
+        const imgHtml = (m.image_data ? `<div style="margin-top:4px"><img src="${m.image_data}" alt="image" style="max-width:360px;max-height:240px;border-radius:8px;display:block"/></div>` : '');
+        row.innerHTML = mine
+            ? `<div class="bubble">${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div>`
+            : `<img src="${avatar}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble"><div style="font-weight:700;margin-bottom:2px">${escapeHtml(name)}</div>${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
+        box.appendChild(row);
+        if (m.id && m.id > maxId) maxId = m.id;
+        if (m.id) chatState.renderedGroupIdSetByGroup[chatState.currentGroupId].add(m.id);
+    });
+    chatState.lastGroupMsgIdByGroup[chatState.currentGroupId] = maxId;
+    if (shouldStick || chatState.autoScroll) box.scrollTop = box.scrollHeight; else { const delta = box.scrollHeight - prevHeight; if (delta !== 0) box.scrollTop = prevTop + delta; }
+}
+
+function appendGroupMessages(list){
+    const box = document.getElementById('chatMessages');
+    const wasStick = chatState.autoScroll;
+    const anchoredToBottom = isNearBottom(box, 48);
+    const prevTop = box.scrollTop;
+    const prevHeight = box.scrollHeight;
+    let maxId = chatState.lastGroupMsgIdByGroup[chatState.currentGroupId] || 0;
+    const rendered = chatState.renderedGroupIdSetByGroup[chatState.currentGroupId] || (chatState.renderedGroupIdSetByGroup[chatState.currentGroupId] = new Set());
+    list.forEach(m=>{
+        if (m.id && rendered.has(m.id)) return;
+        const mine = m.sender_id === currentUser.id;
+        const row = document.createElement('div');
+        row.className = `msg ${mine?'me':'peer'}`;
+        if (m.id != null) row.dataset.msgId = String(m.id);
+        const avatar = mine ? (currentUser.avatar||'') : (m.sender_avatar||'');
+        const name = mine ? (currentUser.username||'我') : (m.sender_name||'成員');
+        const imgHtml = (m.image_data ? `<div style=\"margin-top:4px\"><img src=\"${m.image_data}\" alt=\"image\" style=\"max-width:360px;max-height:240px;border-radius:8px;display:block\"/></div>` : '');
+        row.innerHTML = mine
+            ? `<div class="bubble">${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div>`
+            : `<img src="${avatar}" class="avatar" style="width:28px;height:28px;border-radius:50%"/><div><div class="bubble"><div style="font-weight:700;margin-bottom:2px">${escapeHtml(name)}</div>${escapeHtml(m.content||'')}${imgHtml}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
+        box.appendChild(row);
+        if (m.id && m.id > maxId) maxId = m.id;
+        if (m.id) rendered.add(m.id);
+    });
+    chatState.lastGroupMsgIdByGroup[chatState.currentGroupId] = maxId;
+    const containsMine = list.some(m => m.sender_id === currentUser.id);
+    if (wasStick || containsMine || anchoredToBottom) box.scrollTop = box.scrollHeight; else { const delta = box.scrollHeight - prevHeight; if (delta !== 0) box.scrollTop = prevTop + delta; }
 }
 
 function renderMessages(list){
@@ -1619,6 +1700,37 @@ function restartPolling(){
     startMessagePolling();
 }
 
+// ===== 群組輪詢（沿用個人訊息策略） =====
+let groupPollTimer = null;
+let groupPollCounter = 0;
+let groupBackoffMs = 700;
+let groupBackoffFailCount = 0;
+function startGroupPolling(){
+    stopGroupPolling();
+    groupPollTimer = setInterval(async ()=>{
+        try{
+            if (!chatState.currentGroupId) return;
+            groupPollCounter = (groupPollCounter + 1) % 5;
+            if (groupPollCounter === 0) {
+                await fetchGroupMessages();
+            } else {
+                const lastId = chatState.lastGroupMsgIdByGroup[chatState.currentGroupId] || 0;
+                const url = lastId ? `${API_BASE_URL}/group-messages?groupId=${encodeURIComponent(chatState.currentGroupId)}&after=${lastId}` : `${API_BASE_URL}/group-messages?groupId=${encodeURIComponent(chatState.currentGroupId)}`;
+                const resp = await fetch(url, { headers:{ Authorization:`Bearer ${authToken}` } });
+                if (resp.status === 429) { handleGroupBackoff(); return; }
+                if (!resp.ok) return;
+                const d = await resp.json();
+                const list = d.messages||[];
+                if (list.length) appendGroupMessages(list);
+            }
+        }catch(_){ }
+    }, groupBackoffMs);
+}
+function stopGroupPolling(){ if (groupPollTimer) { clearInterval(groupPollTimer); groupPollTimer = null; } }
+function handleGroupBackoff(){ groupBackoffFailCount = Math.min(groupBackoffFailCount+1,6); groupBackoffMs = Math.min(5000, 700*Math.pow(1.6, groupBackoffFailCount)); restartGroupPolling(); }
+function resetGroupBackoff(){ if (groupBackoffFailCount!==0 || groupBackoffMs!==700){ groupBackoffFailCount=0; groupBackoffMs=700; restartGroupPolling(); } }
+function restartGroupPolling(){ if (groupPollTimer) { clearInterval(groupPollTimer); groupPollTimer = null; } startGroupPolling(); }
+
 function appendMessages(list){
     const box = document.getElementById('chatMessages');
     const wasStick = chatState.autoScroll;
@@ -1743,8 +1855,18 @@ function initSSE(){
         sseSource.addEventListener('new_message', (e)=>{
             try{
                 const data = JSON.parse(e.data||'{}');
-                if (!chatState.currentPeer || data.sender_id !== chatState.currentPeer.id) return;
-                appendMessages([data]);
+                // 個人訊息
+                if (data.receiver_id && data.sender_id){
+                    if (!chatState.currentPeer || data.sender_id !== chatState.currentPeer.id) return;
+                    appendMessages([data]);
+                    return;
+                }
+                // 群組訊息
+                if (data.group_id){
+                    if (!chatState.currentGroupId || data.group_id !== chatState.currentGroupId) return;
+                    appendGroupMessages([data]);
+                    return;
+                }
             }catch(_){ }
         });
         sseSource.addEventListener('read_update', (_)=>{
