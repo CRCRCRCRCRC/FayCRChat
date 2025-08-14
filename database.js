@@ -47,6 +47,39 @@ async function ensureTables() {
     // 圖片訊息（Base64 Data URL 或純 base64），與 MIME
     await sql`alter table messages add column if not exists image_data text`;
     await sql`alter table messages add column if not exists image_mime text`;
+
+    // ===== Groups =====
+    await sql`
+        create table if not exists groups (
+            id serial primary key,
+            name text not null,
+            owner_id int not null references users(id) on delete cascade,
+            created_at timestamptz default now(),
+            avatar_data text
+        )
+    `;
+    await sql`alter table groups add column if not exists avatar_data text`;
+    await sql`
+        create table if not exists group_members (
+            id serial primary key,
+            group_id int not null references groups(id) on delete cascade,
+            user_id int not null references users(id) on delete cascade,
+            added_at timestamptz default now(),
+            unique (group_id, user_id)
+        )
+    `;
+    await sql`
+        create table if not exists group_messages (
+            id serial primary key,
+            group_id int not null references groups(id) on delete cascade,
+            sender_id int not null references users(id) on delete cascade,
+            content text not null,
+            created_at timestamptz default now(),
+            image_data text,
+            image_mime text,
+            client_id text unique
+        )
+    `;
 }
 
 // 由暱稱產生基底 handle：只保留英文字母（a-z），轉小寫；空則回退 'user'
@@ -334,6 +367,110 @@ class Database {
         return { id: rows[0].id, createdAt: rows[0].created_at };
     }
 
+    // ====== Groups ======
+    async createGroup(ownerId, name, memberIds = [], avatarData = null) {
+        await this._init;
+        const groupName = (name || '').toString().trim();
+        if (!groupName) throw new Error('INVALID_NAME');
+        // 建立群組
+        const gRows = await sql`insert into groups (name, owner_id, avatar_data) values (${groupName}, ${ownerId}, ${avatarData || null}) returning id`;
+        const groupId = gRows[0].id;
+        // 成員去重，確保包含建立者
+        const uniqueIds = new Set([Number(ownerId), ...memberIds.map(n => Number(n)).filter(Number.isFinite)]);
+        const values = [...uniqueIds].map(uid => sql`(${groupId}, ${uid})`);
+        if (values.length) {
+            await sql`insert into group_members (group_id, user_id) values ${sql(values)}`;
+        }
+        return { id: groupId };
+    }
+
+    async getUserGroups(userId) {
+        await this._init;
+        const rows = await sql`
+            select g.id, g.name, g.avatar_data
+            from group_members gm
+            join groups g on g.id = gm.group_id
+            where gm.user_id = ${userId}
+            order by g.created_at desc
+        `;
+        return rows.map(r => ({ id: r.id, name: r.name, avatar: r.avatar_data }));
+    }
+
+    async getGroupMemberIds(groupId) {
+        await this._init;
+        const rows = await sql`select user_id from group_members where group_id = ${groupId}`;
+        return rows.map(r => r.user_id);
+    }
+
+    async assertGroupMember(userId, groupId) {
+        const rows = await sql`select 1 from group_members where user_id = ${userId} and group_id = ${groupId} limit 1`;
+        if (!rows.length) throw new Error('NOT_GROUP_MEMBER');
+    }
+
+    async sendGroupMessage(senderId, groupId, content, clientId = null, imageData = null, imageMime = null) {
+        await this._init;
+        const gid = Number(groupId);
+        const text = (content || '').toString();
+        const hasImage = !!(imageData && String(imageData).length);
+        if (!Number.isFinite(gid) || (!text.trim() && !hasImage)) throw new Error('INVALID_INPUT');
+        await this.assertGroupMember(senderId, gid);
+        let rows;
+        if (clientId) {
+            rows = await sql`
+                insert into group_messages (group_id, sender_id, content, client_id, image_data, image_mime)
+                values (${gid}, ${senderId}, ${text}, ${clientId}, ${hasImage ? imageData : null}, ${hasImage ? imageMime : null})
+                on conflict (client_id) do nothing
+                returning id, created_at
+            `;
+            if (!rows.length) rows = await sql`select id, created_at from group_messages where client_id = ${clientId} limit 1`;
+        } else {
+            rows = await sql`insert into group_messages (group_id, sender_id, content, image_data, image_mime) values (${gid}, ${senderId}, ${text}, ${hasImage ? imageData : null}, ${hasImage ? imageMime : null}) returning id, created_at`;
+        }
+        return { id: rows[0].id, createdAt: rows[0].created_at };
+    }
+
+    async getGroupMessages(userId, groupId, limit = 50, beforeId = null, afterId = null) {
+        await this._init;
+        const gid = Number(groupId);
+        if (!Number.isFinite(gid)) throw new Error('BAD_GROUP');
+        await this.assertGroupMember(userId, gid);
+        const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+        let rows;
+        if (afterId != null) {
+            rows = await sql`
+                select gm.id, gm.group_id, gm.sender_id, gm.content, gm.created_at, gm.image_data, gm.image_mime,
+                       u.username as sender_name, u.avatar_data as sender_avatar
+                from group_messages gm
+                join users u on u.id = gm.sender_id
+                where gm.group_id = ${gid} and gm.id > ${afterId}
+                order by gm.id asc
+                limit ${safeLimit}
+            `;
+            return rows;
+        } else if (beforeId != null) {
+            rows = await sql`
+                select gm.id, gm.group_id, gm.sender_id, gm.content, gm.created_at, gm.image_data, gm.image_mime,
+                       u.username as sender_name, u.avatar_data as sender_avatar
+                from group_messages gm
+                join users u on u.id = gm.sender_id
+                where gm.group_id = ${gid} and gm.id < ${beforeId}
+                order by gm.id desc
+                limit ${safeLimit}
+            `;
+            return rows.reverse();
+        } else {
+            rows = await sql`
+                select gm.id, gm.group_id, gm.sender_id, gm.content, gm.created_at, gm.image_data, gm.image_mime,
+                       u.username as sender_name, u.avatar_data as sender_avatar
+                from group_messages gm
+                join users u on u.id = gm.sender_id
+                where gm.group_id = ${gid}
+                order by gm.id desc
+                limit ${safeLimit}
+            `;
+            return rows.reverse();
+        }
+    }
     async getMessages(userId, withUserId, limit = 50, beforeId = null, afterId = null) {
         await this._init;
         const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));

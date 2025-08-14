@@ -1068,6 +1068,13 @@ function mountChatUI() {
             activeBtn.classList.add('is-active');
         }
     }
+
+    // 綁定「新增群組」按鈕（在群組 rail 顯示）
+    const addBtn = document.getElementById('createGroupBtn');
+    if (addBtn && !addBtn._wired) {
+        addBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openCreateGroupModal(); });
+        addBtn._wired = true;
+    }
 }
 
 function bindAddFriendForm(){
@@ -1163,6 +1170,68 @@ function renderFriendList(){
     });
 }
 
+// ====== Group UI ======
+function openCreateGroupModal(){
+    if (!currentUser) { showLogin(); return; }
+    const modal = document.getElementById('createGroupModal');
+    const listBox = document.getElementById('groupFriendList');
+    const nameInput = document.getElementById('groupNameInput');
+    const avatarPreview = document.getElementById('groupAvatarPreview');
+    if (avatarPreview && !avatarPreview.src) avatarPreview.src = generateAvatarDataUrl('G');
+    if (!modal || !listBox) return;
+    listBox.innerHTML = '';
+    // 產生好友多選清單
+    (chatState.friends||[]).forEach(f=>{
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `<input type="checkbox" class="group-friend" data-id="${f.id}" style="margin-right:.5rem"/>`+
+                         `<img class="avatar" src="${f.avatar||''}"/>`+
+                         `<div class="name">${f.username}</div>`;
+        listBox.appendChild(row);
+    });
+    if (nameInput) nameInput.value = '';
+    modal.classList.add('show');
+    document.body.classList.add('modal-open');
+    const form = document.getElementById('createGroupForm');
+    if (form && !form._wired){
+        form.addEventListener('submit', submitCreateGroup);
+        form._wired = true;
+    }
+    // 綁定群組頭像預覽
+    const avatarInput = document.getElementById('groupAvatarInput');
+    if (avatarInput && !avatarInput._wired){
+        avatarInput.addEventListener('change', async (e)=>{
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            try{
+                const b64 = await fileToBase64(f);
+                document.getElementById('groupAvatarPreview').src = b64;
+                window._createGroupAvatar = b64;
+            }catch(_){ }
+        });
+        avatarInput._wired = true;
+    }
+}
+
+async function submitCreateGroup(e){
+    e.preventDefault();
+    const name = (document.getElementById('groupNameInput').value||'').trim();
+    if (!name) { showAlert('請輸入群組名稱'); return; }
+    const checks = Array.from(document.querySelectorAll('#groupFriendList .group-friend'));
+    const memberIds = checks.filter(c=>c.checked).map(c=>parseInt(c.getAttribute('data-id'),10)).filter(Number.isFinite);
+    try{
+        const avatar = window._createGroupAvatar || document.getElementById('groupAvatarPreview').src || '';
+        const resp = await fetch(`${API_BASE_URL}/groups`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ name, memberIds, avatar }) });
+        const d = await resp.json().catch(()=>({}));
+        if (!resp.ok){ showAlert(d.message||'建立失敗'); return; }
+        closeModal('createGroupModal');
+        showAlert('群組已建立','success');
+        // 切換到群組 rail，之後可擴充群組列表與聊天
+        chatState.activeRail = 'groups';
+        switchRail('groups');
+    }catch(err){ showAlert('建立失敗，請稍後再試'); }
+}
+
 function switchRail(key){
     const listBox = document.getElementById('sidebarContent');
     const title = document.getElementById('chatTitle');
@@ -1215,6 +1284,9 @@ function switchRail(key){
           </div>
         `;
 			if (mTitle) mTitle.textContent = '群組';
+        // 顯示新增群組按鈕
+        const addBtn = document.getElementById('createGroupBtn');
+        if (addBtn) addBtn.style.display = 'inline-flex';
         return;
     }
     if (key === 'settings'){
@@ -1254,6 +1326,9 @@ function switchRail(key){
 			  </div>
 			`;
 			if (mTitle) mTitle.textContent = '探索';
+        // 其他 rail 隱藏新增群組按鈕
+        const addBtn = document.getElementById('createGroupBtn');
+        if (addBtn) addBtn.style.display = 'none';
         return;
     }
 }

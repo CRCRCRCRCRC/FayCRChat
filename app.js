@@ -432,6 +432,64 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
     }
 });
 
+// ===== Groups =====
+// 建立群組：name + memberIds（包含 owner 會自動加入）
+app.post('/api/groups', authenticateToken, async (req, res) => {
+    try {
+        const { name, memberIds, avatar } = req.body;
+        if (!name || (typeof name !== 'string')) return res.status(400).json({ error: 'INVALID_NAME', message: '群組名稱不可為空' });
+        const ids = Array.isArray(memberIds) ? memberIds : [];
+        const g = await database.createGroup(req.user.userId, name, ids, avatar || null);
+        res.json({ success: true, group: { id: g.id, name, avatar: avatar || null } });
+    } catch (e) {
+        if (e.message === 'INVALID_NAME') return res.status(400).json({ error: 'INVALID_NAME', message: '群組名稱不可為空' });
+        console.error('create group error:', e);
+        res.status(500).json({ error: 'CREATE_GROUP_FAILED' });
+    }
+});
+
+// 取使用者所在群組
+app.get('/api/groups', authenticateToken, async (req, res) => {
+    try { const list = await database.getUserGroups(req.user.userId); res.json({ success:true, groups: list }); }
+    catch(e){ res.status(500).json({ error:'FETCH_GROUPS_FAILED' }); }
+});
+
+// 群組訊息
+app.get('/api/group-messages', authenticateToken, messagesLimiter, async (req, res) => {
+    try {
+        const gid = req.query.groupId ? parseInt(req.query.groupId, 10) : null;
+        const beforeId = req.query.before ? parseInt(req.query.before, 10) : null;
+        const afterId = req.query.after ? parseInt(req.query.after, 10) : null;
+        if (!Number.isFinite(gid)) return res.status(400).json({ error:'BAD_REQUEST', message:'缺少或無效的 groupId' });
+        const list = await database.getGroupMessages(req.user.userId, gid, 50, beforeId, afterId);
+        res.json({ success:true, messages: list });
+    } catch(e){
+        if (e.message === 'NOT_GROUP_MEMBER') return res.status(403).json({ error:'FORBIDDEN' });
+        res.status(500).json({ error:'FETCH_FAILED', message: e.message || '取得訊息失敗' });
+    }
+});
+
+app.post('/api/group-messages', authenticateToken, messagesLimiter, async (req, res) => {
+    try {
+        const { groupId, content, clientId, image, imageMime } = req.body;
+        const gid = Number(groupId);
+        const text = typeof content === 'string' ? content : '';
+        const hasImage = !!(image && String(image).length);
+        if (!Number.isFinite(gid) || (!text.trim() && !hasImage)) return res.status(400).json({ error:'BAD_REQUEST', message:'群組或內容/圖片無效' });
+        const r = await database.sendGroupMessage(req.user.userId, gid, text, clientId || null, hasImage ? image : null, hasImage ? (imageMime || 'image/png') : null);
+        res.json({ success:true, id:r.id, createdAt: r.createdAt });
+        // SSE 廣播給群組所有成員
+        try {
+            const memberIds = await database.getGroupMemberIds(gid);
+            const payload = { id: r.id, group_id: gid, sender_id: req.user.userId, content: text, created_at: r.createdAt, image_data: hasImage ? image : null, image_mime: hasImage ? (imageMime || 'image/png') : null };
+            memberIds.filter(uid => uid !== req.user.userId).forEach(uid => broadcastToUser(uid, 'new_message', payload));
+        } catch(_) {}
+    } catch(e){
+        if (e.message === 'NOT_GROUP_MEMBER') return res.status(403).json({ error:'FORBIDDEN' });
+        res.status(500).json({ error:'SEND_FAILED', message: e.message || '發送失敗' });
+    }
+});
+
 // 取得與某人對話訊息
 app.get('/api/messages', authenticateToken, messagesLimiter, async (req, res) => {
     try {

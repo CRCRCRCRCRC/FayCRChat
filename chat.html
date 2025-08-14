@@ -54,6 +54,7 @@
     </aside>
     <section class="chat-main">
       <header class="chat-header">
+        <button id="createGroupBtn" class="btn-icon" title="新增群組" style="display:none;"><i class="fas fa-plus"></i></button>
         <div class="chat-title" id="chatTitle">選擇一個會話開始聊天</div>
       </header>
       <div class="chat-messages" id="chatMessages"></div>
@@ -68,6 +69,35 @@
         <button id="chatSendBtn" class="btn btn-primary">傳送</button>
       </footer>
     </section>
+  </div>
+
+  <!-- 新增群組彈窗 -->
+  <div class="modal" id="createGroupModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>新增群組</h2>
+        <span class="close" data-modal-id="createGroupModal">&times;</span>
+      </div>
+      <form class="auth-form" id="createGroupForm">
+        <div class="form-group">
+          <label for="groupNameInput">群組名稱</label>
+          <input type="text" id="groupNameInput" placeholder="請輸入群組名稱" required />
+        </div>
+        <div class="form-group">
+          <label for="groupAvatarInput">群組頭像</label>
+          <div class="avatar-upload">
+            <img class="avatar-preview" id="groupAvatarPreview" src="" alt="群組頭像預覽" />
+            <input type="file" id="groupAvatarInput" accept="image/*" />
+            <label for="groupAvatarInput" class="avatar-upload-btn"><i class="fas fa-camera"></i>選擇頭像</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>選擇好友</label>
+          <div id="groupFriendList" class="list"></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">建立</button>
+      </form>
+    </div>
   </div>
 
   <!-- 新增好友彈窗 -->
