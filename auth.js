@@ -903,7 +903,7 @@ async function sendCurrentChatMessage(){
         imageMime = first.type || 'image/png';
         imageData = await fileToBase64(first);
     }
-    if (!chatState.currentPeer) { showAlert('請先在左側選擇好友'); return; }
+    if (!chatState.currentPeer && !chatState.currentGroupId) { showAlert('請先在左側選擇好友或群組'); return; }
     if (!text && !imageData && (!window._selectedChatFiles || window._selectedChatFiles.length===0)) return;
     if (isSendingMessage) return; // 防雙觸發（Enter + Click、或多重綁定）
     isSendingMessage = true;
@@ -915,12 +915,25 @@ async function sendCurrentChatMessage(){
     const prevDisabled = input.disabled;
     input.disabled = true; btn.disabled = true;
     try{
+        if (chatState.currentGroupId){
+            const clientId = `${currentUser.id}-g${chatState.currentGroupId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const resp = await fetch(`${API_BASE_URL}/group-messages`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ groupId: chatState.currentGroupId, content: text, clientId, image: imageData, imageMime }) });
+            if (resp.ok){
+                input.value=''; if (imgInput) imgInput.value='';
+                window._pastedImageFile = null; const previewList = document.getElementById('chatPreviewList'); if (previewList) previewList.innerHTML='<label id="chatAddTile" class="chat-preview-add" for="chatImageInput" title="新增圖片"><i class="fas fa-plus"></i></label>';
+                window._selectedChatFiles = [];
+                let r=null; try{ r=await resp.json(); }catch(_){}
+                const serverId=r&&r.id?r.id:null; const createdAt=r&&r.createdAt?r.createdAt:Date.now();
+                appendGroupMessages([{ id: serverId, group_id: chatState.currentGroupId, sender_id: currentUser.id, content: text, created_at: createdAt, image_data: imageData, image_mime: imageMime }]);
+            } else {
+                let detail=''; try { detail=(await resp.json()).message||''; } catch(_) { try { detail=await resp.text(); } catch(_){} }
+                if (resp.status===401||resp.status===403) { showAlert('登入已過期或權限不足，請重新登入'); showLogin(); }
+                else { showAlert(detail||'傳送失敗，請稍後再試'); }
+            }
+            return;
+        }
         const clientId = `${currentUser.id}-${chatState.currentPeer.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const resp = await fetch(`${API_BASE_URL}/messages`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` },
-            body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text, clientId, image: imageData, imageMime })
-        });
+        const resp = await fetch(`${API_BASE_URL}/messages`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ toUserId: chatState.currentPeer.id, content: text, clientId, image: imageData, imageMime }) });
         if (resp.ok){
             input.value='';
             if (imgInput) imgInput.value = '';
