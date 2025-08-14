@@ -1338,16 +1338,26 @@ function switchRail(key){
 			listBox.innerHTML = '';
 			chatState.currentPeer = null;
 			setComposerEnabled(false, '請從左邊選擇功能');
-			nonChatContainer.innerHTML = `
-		  <div class="sidebar-card">
-		    <div class="sidebar-title">群組</div>
-		    <div id="groupList" class="sidebar-list"></div>
-		  </div>
-		`;
+        // 將群組頁面的 B + C 內容集中渲染到 A 區（sidebar）
+        listBox.innerHTML = `
+          <div class="sidebar-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem;">
+              <div class="sidebar-title" style="margin:0">群組</div>
+              <button id="createGroupBtnSide" class="btn-icon" title="新增群組"><i class="fas fa-plus"></i></button>
+            </div>
+            <div id="groupList" class="sidebar-list"></div>
+          </div>
+        `;
 			if (mTitle) mTitle.textContent = '群組';
-        // 顯示新增群組按鈕
-        const addBtn = document.getElementById('createGroupBtn');
-        if (addBtn) addBtn.style.display = 'inline-flex';
+        // 隱藏 header 上的新增群組按鈕，改用 A 區按鈕
+        const headerAddBtn = document.getElementById('createGroupBtn');
+        if (headerAddBtn) headerAddBtn.style.display = 'none';
+        // 綁定 A 區新增按鈕
+        const sideAddBtn = document.getElementById('createGroupBtnSide');
+        if (sideAddBtn && !sideAddBtn._wired){
+            sideAddBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openCreateGroupModal(); });
+            sideAddBtn._wired = true;
+        }
         // 載入群組列表
         fetchGroups().then(renderGroupList);
         return;
