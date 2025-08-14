@@ -660,3 +660,18 @@ body.modal-open { overflow: hidden; }
 .chat-notif-btn{ background:rgba(255,255,255,.92); border:0; border-radius:999px; padding:.55rem .8rem; cursor:pointer; box-shadow: var(--shadow-soft); font-size:18px; line-height:1; }
 .chat-notif-btn.red{ background:#ef4444; color:#fff; }
 .chat-notif-btn:hover{ filter: brightness(0.96); }
+
+/* 新增群組（Step 1）好友清單對齊與可讀性 */
+.modal #groupFriendList{ padding:.25rem 0; }
+.modal #groupFriendList .list-item{
+  display:grid;
+  grid-template-columns: 22px 36px 1fr; /* 勾選框 / 頭像 / 名字 */
+  align-items:center;
+  gap:10px;
+  padding:.6rem .7rem;
+  border-radius:10px;
+}
+.modal #groupFriendList .list-item:hover{ background: rgba(15,23,42,.06); }
+.modal #groupFriendList .group-friend{ width:18px; height:18px; accent-color: var(--primary-color); }
+.modal #groupFriendList .avatar{ width:36px; height:36px; border-radius:50%; object-fit:cover; }
+.modal #groupFriendList .name{ color:#0f172a; font-weight:700; }
