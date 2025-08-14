@@ -1206,7 +1206,7 @@ function openCreateGroupModal(){
     const listBox = document.getElementById('groupFriendList');
     const nameInput = document.getElementById('groupNameInput');
     const avatarPreview = document.getElementById('groupAvatarPreview');
-    if (avatarPreview && !avatarPreview.src) avatarPreview.src = generateAvatarDataUrl('G');
+    if (avatarPreview){ avatarPreview.src=''; avatarPreview.classList.remove('has-image'); }
     if (!modal || !listBox) return;
     listBox.innerHTML = '';
     // 產生好友多選清單
@@ -1265,7 +1265,8 @@ function openCreateGroupModal(){
             if (!f) return;
             try{
                 const b64 = await fileToBase64(f);
-                document.getElementById('groupAvatarPreview').src = b64;
+                const pv = document.getElementById('groupAvatarPreview');
+                pv.src = b64; pv.classList.add('has-image');
                 window._createGroupAvatar = b64;
             }catch(_){ }
         });
