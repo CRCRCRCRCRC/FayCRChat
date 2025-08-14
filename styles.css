@@ -613,7 +613,7 @@ body.modal-open { overflow: hidden; }
   .mobile-topbar{ position: fixed; top: 0; left:0; right:0; height: 52px; background: rgba(36,39,44,.92); backdrop-filter: blur(10px); display:flex; align-items:center; gap:.5rem; padding: 0 .6rem; z-index: 1100; border-bottom:1px solid rgba(255,255,255,.1); }
   .icon-btn{ width:38px; height:38px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.08); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; -webkit-tap-highlight-color: transparent; }
   .mobile-title{ color:#fff; font-weight:700; margin-left:.25rem; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .mobile-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1200; }
+  .mobile-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1099; }
 
   .chat-app{ flex-direction: row; height: 100vh; padding-top: 52px; }
   .chat-rail{ position: fixed; top: 52px; bottom: 0; left: 0; width: 72px; background:#24272c; padding:12px 0; gap:12px; transition: transform .25s ease; transform: translateX(-100%); z-index: 1201; border-right:1px solid rgba(255,255,255,.12); will-change: transform; }
@@ -623,7 +623,6 @@ body.modal-open { overflow: hidden; }
   .chat-main{ flex: 1; display:flex; flex-direction:column; }
   /* 好友列表模式：隱藏聊天區（直到選擇會話）*/
   body:not(.mobile-chat) .chat-main{ display:none; }
-  body:not(.mobile-chat) .chat-rail{ transform: translateX(0); }
   /* 確保抽屜開啟時位於覆蓋層之上並可點擊 */
   .chat-rail{ pointer-events:auto; }
   .mobile-overlay{ pointer-events:auto; }

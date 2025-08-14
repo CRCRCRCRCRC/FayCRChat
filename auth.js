@@ -99,8 +99,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const rail = document.querySelector('.chat-rail');
             const openDrawer = ()=>{ if (rail) rail.classList.add('open'); mOverlay.style.display='block'; };
             const closeDrawer = ()=>{ if (rail) rail.classList.remove('open'); mOverlay.style.display='none'; };
-            mMenu.onclick = ()=>{ (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer(); };
-            mOverlay.onclick = closeDrawer;
+            const toggleDrawer = (e)=>{ if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); } (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer(); return false; };
+            // 三條線按鈕：多通道事件，避免部份瀏覽器吞掉點擊
+            mMenu.addEventListener('pointerdown', toggleDrawer, { passive: false });
+            mMenu.addEventListener('click', toggleDrawer, { passive: false });
+            mMenu.addEventListener('touchend', toggleDrawer, { passive: false });
+            // 點擊遮罩關閉
+            const overlayClose = (e)=>{ if (e) e.stopPropagation(); closeDrawer(); };
+            mOverlay.addEventListener('click', overlayClose, { passive: true });
+            mOverlay.addEventListener('pointerdown', overlayClose, { passive: true });
+            // 防止頂部列內部點擊被外層攔截
+            mTop.addEventListener('click', (e)=>{ e.stopPropagation(); }, { passive: true });
             // 防止抽屜攔截點擊：讓 .chat-rail 內部點擊不改變視圖，僅由我們的 handler 控制
             const railContainer = document.querySelector('.chat-rail');
             if (railContainer) {
