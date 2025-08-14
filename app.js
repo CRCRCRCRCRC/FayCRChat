@@ -450,8 +450,13 @@ app.post('/api/groups', authenticateToken, async (req, res) => {
 
 // 取使用者所在群組
 app.get('/api/groups', authenticateToken, async (req, res) => {
-    try { const list = await database.getUserGroups(req.user.userId); res.json({ success:true, groups: list }); }
-    catch(e){ res.status(500).json({ error:'FETCH_GROUPS_FAILED' }); }
+    try {
+        const list = await database.getUserGroups(req.user.userId);
+        res.json({ success:true, groups: list });
+    } catch(e){
+        console.error('fetch groups error:', e);
+        res.status(500).json({ error:'FETCH_GROUPS_FAILED' });
+    }
 });
 
 // 群組訊息

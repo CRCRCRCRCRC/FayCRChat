@@ -377,9 +377,8 @@ class Database {
         const groupId = gRows[0].id;
         // 成員去重，確保包含建立者
         const uniqueIds = new Set([Number(ownerId), ...memberIds.map(n => Number(n)).filter(Number.isFinite)]);
-        const values = [...uniqueIds].map(uid => sql`(${groupId}, ${uid})`);
-        if (values.length) {
-            await sql`insert into group_members (group_id, user_id) values ${sql(values)}`;
+        for (const uid of uniqueIds) {
+            await sql`insert into group_members (group_id, user_id) values (${groupId}, ${uid}) on conflict (group_id, user_id) do nothing`;
         }
         return { id: groupId };
     }

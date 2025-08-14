@@ -1285,7 +1285,7 @@ async function submitCreateGroup(e){
         const avatar = window._createGroupAvatar || document.getElementById('groupAvatarPreview').src || '';
         const resp = await fetch(`${API_BASE_URL}/groups`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ name, memberIds, avatar }) });
         const d = await resp.json().catch(()=>({}));
-        if (!resp.ok){ showAlert(d.message||'建立失敗'); return; }
+        if (!resp.ok){ console.error('create group failed:', d); showAlert(d.message||'建立失敗'); return; }
         closeModal('createGroupModal');
         showAlert('群組已建立','success');
         // 切換到群組 rail，之後可擴充群組列表與聊天
