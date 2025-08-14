@@ -1283,15 +1283,35 @@ async function submitCreateGroup(e){
     if (memberIds.length < 2) { showAlert('請先至少選擇兩位好友'); return; }
     try{
         const avatar = window._createGroupAvatar || document.getElementById('groupAvatarPreview').src || '';
+        // 立即樂觀更新：先把新群組加到列表，再等待後端回應
+        const tempId = `tmp-${Date.now()}`;
+        chatState.groups = chatState.groups || [];
+        chatState.groups.unshift({ id: tempId, name, avatar });
+        renderGroupList();
+        // 並行呼叫後端
         const resp = await fetch(`${API_BASE_URL}/groups`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ name, memberIds, avatar }) });
         const d = await resp.json().catch(()=>({}));
-        if (!resp.ok){ console.error('create group failed:', d); showAlert(d.message||'建立失敗'); return; }
+        if (!resp.ok){
+            // 回滾樂觀更新
+            chatState.groups = (chatState.groups||[]).filter(g=>g.id!==tempId);
+            renderGroupList();
+            console.error('create group failed:', d);
+            showAlert(d.message||'建立失敗');
+            return;
+        }
+        // 以真正 id 取代暫時項目
+        chatState.groups = (chatState.groups||[]).map(g=> g.id===tempId ? { id: d.group?.id || tempId, name, avatar } : g);
+        renderGroupList();
         closeModal('createGroupModal');
         showAlert('群組已建立','success');
-        // 切換到群組 rail，之後可擴充群組列表與聊天
         chatState.activeRail = 'groups';
         switchRail('groups');
-    }catch(err){ showAlert('建立失敗，請稍後再試'); }
+    }catch(err){
+        // 回滾
+        chatState.groups = (chatState.groups||[]).filter(g=>String(g.id).startsWith('tmp-')===false);
+        renderGroupList();
+        showAlert('建立失敗，請稍後再試');
+    }
 }
 
 function switchRail(key){
@@ -1361,6 +1381,10 @@ function switchRail(key){
         }
         // 載入群組列表
         fetchGroups().then(renderGroupList);
+        // 右側 B+C 區改為顯示提示（避免看起來沒反應）
+        nonChatContainer.innerHTML = `
+          <div style="padding:1rem; color:#fff; opacity:.9">請在 A 區選擇或建立群組</div>
+        `;
         return;
     }
     if (key === 'settings'){
@@ -1413,6 +1437,8 @@ function openConversation(peer){
     document.getElementById('chatMessages').innerHTML = '';
     chatState.autoScroll = true;
     setComposerEnabled(true, '輸入訊息...');
+    const composer = document.querySelector('.chat-input');
+    if (composer) composer.style.display = 'flex';
     fetchMessages();
     // 啟動增量輪詢，低延遲抓新訊息
     startMessagePolling();
