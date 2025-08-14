@@ -1002,6 +1002,8 @@ function mountChatUI() {
         };
         // 僅監聽 click，避免 touchend/pointerdown 在抽屜剛開時誤觸
         btn.addEventListener('click', onPress, { passive: false });
+        // 行動裝置強化：同時掛 touchend，避免部份瀏覽器 click 未觸發
+        btn.addEventListener('touchend', onPress, { passive: false });
     });
     // 導航欄底部：通知與頭像
     const railNotif = document.getElementById('railNotifBtn');
