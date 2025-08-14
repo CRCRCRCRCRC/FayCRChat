@@ -97,24 +97,42 @@ document.addEventListener('DOMContentLoaded', function() {
             const showTopbar = ()=>{ if (window.matchMedia('(max-width: 768px)').matches) mTop.style.display='flex'; else mTop.style.display='none'; };
             showTopbar(); window.addEventListener('resize', showTopbar);
             const rail = document.querySelector('.chat-rail');
-            const openDrawer = ()=>{ if (rail) rail.classList.add('open'); mOverlay.style.display='block'; };
+            const openDrawer = ()=>{ if (rail) rail.classList.add('open'); mOverlay.style.display='block'; try{ window._drawerJustOpenedAt = Date.now(); }catch(_){ } };
             const closeDrawer = ()=>{ if (rail) rail.classList.remove('open'); mOverlay.style.display='none'; };
-            const toggleDrawer = (e)=>{ if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); } (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer(); return false; };
-            // 三條線按鈕：多通道事件，避免部份瀏覽器吞掉點擊
-            mMenu.addEventListener('pointerdown', toggleDrawer, { passive: false });
-            mMenu.addEventListener('click', toggleDrawer, { passive: false });
-            mMenu.addEventListener('touchend', toggleDrawer, { passive: false });
+            let menuTapGuard = false; let menuGuardTimer = null;
+            const toggleFromTouch = (e)=>{
+                try {
+                    if (e && e.cancelable) e.preventDefault();
+                    if (e) e.stopPropagation();
+                    menuTapGuard = true; clearTimeout(menuGuardTimer);
+                    menuGuardTimer = setTimeout(()=>{ menuTapGuard = false; }, 350);
+                } catch(_){}
+                (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer();
+                return false;
+            };
+            const toggleFromClick = (e)=>{
+                try {
+                    if (menuTapGuard) { if (e && e.cancelable) e.preventDefault(); if (e) e.stopPropagation(); return false; }
+                    if (e && e.cancelable) e.preventDefault();
+                    if (e) e.stopPropagation();
+                } catch(_){}
+                (rail && rail.classList.contains('open')) ? closeDrawer() : openDrawer();
+                return false;
+            };
+            // 三條線按鈕：用 touchend + click，並用 guard 避免雙觸發
+            mMenu.addEventListener('touchend', toggleFromTouch, { passive: false });
+            mMenu.addEventListener('click', toggleFromClick, { passive: false });
             // 點擊遮罩關閉
-            const overlayClose = (e)=>{ if (e) e.stopPropagation(); closeDrawer(); };
+            const overlayClose = (e)=>{ if (e) e.stopPropagation(); try{ const now = Date.now(); if (window._drawerJustOpenedAt && (now - window._drawerJustOpenedAt) < 300) return; }catch(_){ } closeDrawer(); };
             mOverlay.addEventListener('click', overlayClose, { passive: true });
             mOverlay.addEventListener('pointerdown', overlayClose, { passive: true });
             // 防止頂部列內部點擊被外層攔截
             mTop.addEventListener('click', (e)=>{ e.stopPropagation(); }, { passive: true });
-            // 防止抽屜攔截點擊：讓 .chat-rail 內部點擊不改變視圖，僅由我們的 handler 控制
+            // 防止抽屜內部點擊造成關閉或切換（僅由我們的 handler 控制）
             const railContainer = document.querySelector('.chat-rail');
             if (railContainer) {
-                railContainer.addEventListener('click', (e)=>{
-                    e.stopPropagation();
+                ['click','touchstart','touchend','pointerdown','pointerup'].forEach(evt=>{
+                    railContainer.addEventListener(evt, (e)=>{ e.stopPropagation(); }, { passive: true });
                 });
             }
             mBack.onclick = ()=>{
@@ -948,6 +966,12 @@ function mountChatUI() {
     document.querySelectorAll('.rail-item').forEach(btn=>{
         const onPress = (e)=>{
             try{
+                // 打開抽屜後的 350ms 內忽略 rail 點擊，避免「閃一下又關」
+                if (window._drawerJustOpenedAt && (Date.now() - window._drawerJustOpenedAt) < 350) {
+                    if (e && e.cancelable) e.preventDefault();
+                    if (e) e.stopPropagation();
+                    return false;
+                }
                 if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); }
                 document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
                 btn.classList.add('is-active');
@@ -963,9 +987,8 @@ function mountChatUI() {
             }catch(_){ }
             return false;
         };
-        btn.addEventListener('pointerdown', onPress, { passive: false });
+        // 僅監聽 click，避免 touchend/pointerdown 在抽屜剛開時誤觸
         btn.addEventListener('click', onPress, { passive: false });
-        btn.addEventListener('touchend', onPress, { passive: false });
     });
     // 導航欄底部：通知與頭像
     const railNotif = document.getElementById('railNotifBtn');
