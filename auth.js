@@ -973,11 +973,11 @@ function mountChatUI() {
                     return false;
                 }
                 if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); }
-                document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
-                btn.classList.add('is-active');
-                const key = btn.getAttribute('data-rail');
+            document.querySelectorAll('.rail-item').forEach(i=>i.classList.remove('is-active'));
+            btn.classList.add('is-active');
+            const key = btn.getAttribute('data-rail');
                 chatState.activeRail = key;
-                switchRail(key);
+            switchRail(key);
                 if (window.matchMedia('(max-width: 768px)').matches){
                     const rail = document.querySelector('.chat-rail');
                     const overlay = document.getElementById('mobileOverlay');
@@ -1171,6 +1171,35 @@ function renderFriendList(){
 }
 
 // ====== Group UI ======
+async function fetchGroups(){
+    try{
+        const resp = await fetch(`${API_BASE_URL}/groups`, { headers:{ Authorization:`Bearer ${authToken}` } });
+        const d = await resp.json().catch(()=>({}));
+        if (resp.ok){ chatState.groups = d.groups||[]; }
+    }catch(_){ chatState.groups = []; }
+}
+
+function renderGroupList(){
+    const list = document.getElementById('groupList');
+    if (!list) return;
+    list.innerHTML = '';
+    const groups = chatState.groups || [];
+    if (!groups.length){
+        const empty = document.createElement('div');
+        empty.className = 'sidebar-sub';
+        empty.textContent = '尚未加入任何群組，點擊左上角 + 來建立';
+        list.appendChild(empty);
+        return;
+    }
+    groups.forEach(g=>{
+        const item = document.createElement('div');
+        item.className='item';
+        const avatar = g.avatar || generateAvatarDataUrl((g.name||'G')[0]||'G');
+        item.innerHTML = `<img class="avatar" src="${avatar}"/><div class="name">${g.name}</div>`;
+        // 後續：點擊可進入群組聊天（尚未實作）
+        list.appendChild(item);
+    });
+}
 function openCreateGroupModal(){
     if (!currentUser) { showLogin(); return; }
     const modal = document.getElementById('createGroupModal');
@@ -1197,6 +1226,37 @@ function openCreateGroupModal(){
         form.addEventListener('submit', submitCreateGroup);
         form._wired = true;
     }
+    // Step 切換控制
+    const stepSelect = document.getElementById('createGroupStepSelect');
+    const stepMeta = document.getElementById('createGroupStepMeta');
+    const nextBtn = document.getElementById('createGroupNextBtn');
+    const prevBtn = document.getElementById('createGroupPrevBtn');
+    const updateNextState = ()=>{
+        const checks = Array.from(document.querySelectorAll('#groupFriendList .group-friend'));
+        const memberIds = checks.filter(c=>c.checked).map(c=>parseInt(c.getAttribute('data-id'),10)).filter(Number.isFinite);
+        nextBtn.disabled = memberIds.length < 2;
+    };
+    if (nextBtn && !nextBtn._wired){
+        nextBtn.addEventListener('click', ()=>{
+            const checks = Array.from(document.querySelectorAll('#groupFriendList .group-friend'));
+            const memberIds = checks.filter(c=>c.checked).map(c=>parseInt(c.getAttribute('data-id'),10)).filter(Number.isFinite);
+            if (memberIds.length < 2){ showAlert('請先至少選擇兩位好友'); return; }
+            stepSelect.style.display = 'none';
+            stepMeta.style.display = 'block';
+        });
+        nextBtn._wired = true;
+    }
+    if (prevBtn && !prevBtn._wired){
+        prevBtn.addEventListener('click', ()=>{
+            stepMeta.style.display = 'none';
+            stepSelect.style.display = 'block';
+            updateNextState();
+        });
+        prevBtn._wired = true;
+    }
+    listBox.querySelectorAll('.group-friend').forEach(cb=>{ cb.addEventListener('change', updateNextState); });
+    updateNextState();
+
     // 綁定群組頭像預覽
     const avatarInput = document.getElementById('groupAvatarInput');
     if (avatarInput && !avatarInput._wired){
@@ -1219,6 +1279,7 @@ async function submitCreateGroup(e){
     if (!name) { showAlert('請輸入群組名稱'); return; }
     const checks = Array.from(document.querySelectorAll('#groupFriendList .group-friend'));
     const memberIds = checks.filter(c=>c.checked).map(c=>parseInt(c.getAttribute('data-id'),10)).filter(Number.isFinite);
+    if (memberIds.length < 2) { showAlert('請先至少選擇兩位好友'); return; }
     try{
         const avatar = window._createGroupAvatar || document.getElementById('groupAvatarPreview').src || '';
         const resp = await fetch(`${API_BASE_URL}/groups`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${authToken}` }, body: JSON.stringify({ name, memberIds, avatar }) });
@@ -1278,15 +1339,17 @@ function switchRail(key){
 			chatState.currentPeer = null;
 			setComposerEnabled(false, '請從左邊選擇功能');
 			nonChatContainer.innerHTML = `
-          <div class="sidebar-card">
-            <div class="sidebar-title">群組</div>
-            <div class="sidebar-sub">即將推出</div>
-          </div>
-        `;
+		  <div class="sidebar-card">
+		    <div class="sidebar-title">群組</div>
+		    <div id="groupList" class="sidebar-list"></div>
+		  </div>
+		`;
 			if (mTitle) mTitle.textContent = '群組';
         // 顯示新增群組按鈕
         const addBtn = document.getElementById('createGroupBtn');
         if (addBtn) addBtn.style.display = 'inline-flex';
+        // 載入群組列表
+        fetchGroups().then(renderGroupList);
         return;
     }
     if (key === 'settings'){
